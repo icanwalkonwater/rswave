@@ -1,0 +1,20 @@
+[package]
+name = "rpi_led_local"
+version = "0.1.0"
+authors = ["Lucas Malandrino <lucas.malandrino@gmail.com>"]
+edition = "2018"
+
+[features]
+very-debug = []
+
+[dependencies]
+rpi_led_common = { path = "../rpi_led_common" }
+rs_ws281x = "^0.4.2"
+cichlid = "^0.2.1"
+byteorder = "^1.4.2"
+ctrlc = "^3.1.7"
+structopt = "^0.3.21"
+anyhow = "^1.0.38"
+log = "^0.4.14"
+env_logger = "^0.8.2"
+int-enum = "^0.4.0"
