@@ -55,7 +55,6 @@ impl Runner for IntensityOnlyRampRunner {
                 Err(err) => bail!(err),
             };
 
-            println!("{}", intensity);
             intensity *= LED_COUNT as f32;
 
             for (i, led) in controller.leds_mut(LED_CHANNEL).iter_mut().enumerate() {

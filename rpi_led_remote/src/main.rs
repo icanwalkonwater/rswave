@@ -85,7 +85,6 @@ fn main() -> anyhow::Result<()> {
                     socket.write_all(&[255, 0, 0]).unwrap();
                 }
                 LedMode::OnlyIntensity => {
-                    println!("Write intensity: {}", intensity);
                     socket.write_f32::<BigEndian>(intensity).unwrap();
                 }
                 _ => todo!(),
