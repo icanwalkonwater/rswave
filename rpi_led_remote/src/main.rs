@@ -1,20 +1,18 @@
 use crate::audio::AudioProcessor;
-use anyhow::anyhow;
-use byteorder::{BigEndian, WriteBytesExt, ReadBytesExt};
+use anyhow::{anyhow, bail};
+use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
 use cpal::{
     traits::{DeviceTrait, HostTrait, StreamTrait},
     Device,
 };
+use int_enum::IntEnum;
+use rpi_led_common::{LedMode, MAGIC};
 use std::{
-    io::{stdout, Stdout, Write},
+    io::{stdin, stdout, Read, Stdout, Write},
     net::TcpStream,
 };
 use structopt::StructOpt;
 use tui::{backend::CrosstermBackend, Terminal};
-use std::io::{stdin, Read};
-use rpi_led_common::{MAGIC, LedMode};
-use int_enum::IntEnum;
-use anyhow::bail;
 
 mod audio;
 
@@ -70,10 +68,8 @@ fn main() -> anyhow::Result<()> {
     match mode {
         LedMode::OnlyColor => {
             socket.write_f32::<BigEndian>(1.0)?;
-        },
-        LedMode::OnlyIntensity => {
-            socket.write_all(&[255, 0, 0])?
-        },
+        }
+        LedMode::OnlyIntensity => socket.write_all(&[255, 0, 0])?,
         _ => todo!(),
     }
 
@@ -87,11 +83,11 @@ fn main() -> anyhow::Result<()> {
             match mode {
                 LedMode::OnlyColor => {
                     socket.write_all(&[255, 0, 0]).unwrap();
-                },
+                }
                 LedMode::OnlyIntensity => {
                     println!("Write intensity: {}", intensity);
                     socket.write_f32::<BigEndian>(intensity).unwrap();
-                },
+                }
                 _ => todo!(),
             }
 

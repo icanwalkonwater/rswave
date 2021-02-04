@@ -1,9 +1,11 @@
-use std::net::TcpStream;
-use rs_ws281x::{Controller, RawColor};
-use byteorder::{ReadBytesExt, BigEndian};
-use std::io::{Read, ErrorKind};
-use crate::{ControllerExt, LED_COUNT, LED_CHANNEL, COLOR_OFF};
+use crate::{ControllerExt, COLOR_OFF, LED_CHANNEL, LED_COUNT};
 use anyhow::bail;
+use byteorder::{BigEndian, ReadBytesExt};
+use rs_ws281x::{Controller, RawColor};
+use std::{
+    io::{ErrorKind, Read},
+    net::TcpStream,
+};
 
 pub trait Runner: Sized {
     fn new(socket: &mut TcpStream) -> anyhow::Result<Self>;
@@ -42,9 +44,7 @@ impl Runner for IntensityOnlyRampRunner {
     fn new(socket: &mut TcpStream) -> anyhow::Result<Self> {
         let mut color = RawColor::default();
         socket.read(&mut color[..3])?;
-        Ok(Self {
-            color,
-        })
+        Ok(Self { color })
     }
 
     fn run(&self, mut socket: TcpStream, controller: &mut Controller) -> anyhow::Result<()> {
@@ -72,6 +72,4 @@ impl Runner for IntensityOnlyRampRunner {
     }
 }
 
-pub struct ColorAndIntensityRampRunner {
-
-}
+pub struct ColorAndIntensityRampRunner {}

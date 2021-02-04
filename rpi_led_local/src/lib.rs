@@ -1,5 +1,5 @@
 use cichlid::ColorRGB;
-use rs_ws281x::{ChannelBuilder, Controller, StripType, RawColor};
+use rs_ws281x::{ChannelBuilder, Controller, RawColor, StripType};
 
 pub mod runners;
 

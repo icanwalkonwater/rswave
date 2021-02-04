@@ -1,18 +1,20 @@
-use byteorder::{WriteBytesExt, ReadBytesExt};
+use byteorder::{ReadBytesExt, WriteBytesExt};
 use cichlid::{prelude::RainbowFillSingleCycle, ColorRGB};
-use rpi_led_local::{create_led_controller, ControllerExt, LED_COUNT, LED_CHANNEL};
+use int_enum::IntEnum;
+use rpi_led_common::{LedMode, MAGIC};
+use rpi_led_local::{
+    create_led_controller,
+    runners::{ColorOnlyRunner, IntensityOnlyRampRunner, Runner},
+    ControllerExt, LED_CHANNEL, LED_COUNT,
+};
 use rs_ws281x::Controller;
 use std::{
-    io::{Write},
-    net::{TcpListener, TcpStream},
+    io::Write,
+    net::{Ipv4Addr, TcpListener, TcpStream},
     thread::sleep,
     time::Duration,
 };
 use structopt::StructOpt;
-use std::net::Ipv4Addr;
-use rpi_led_common::{LedMode, MAGIC};
-use rpi_led_local::runners::{ColorOnlyRunner, Runner, IntensityOnlyRampRunner};
-use int_enum::IntEnum;
 
 #[derive(Copy, Clone, Debug, StructOpt)]
 struct Opt {
@@ -105,15 +107,15 @@ fn handle_connection(
             println!("Only color runner");
             let runner = ColorOnlyRunner::new(&mut socket)?;
             runner.run(socket, controller)?;
-        },
+        }
         LedMode::OnlyIntensity => {
             println!("Only intensity runner");
             let runner = IntensityOnlyRampRunner::new(&mut socket)?;
             runner.run(socket, controller)?;
-        },
+        }
         LedMode::ColorAndIntensity => {
             todo!()
-        },
+        }
     };
 
     Ok(())
