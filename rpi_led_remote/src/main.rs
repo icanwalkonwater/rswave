@@ -5,36 +5,17 @@ use cpal::{
     traits::{DeviceTrait, HostTrait, StreamTrait},
     Device,
 };
-use int_enum::IntEnum;
-use rpi_led_common::{LedMode, MAGIC};
+use rpi_led_common::{LedMode, MAGIC, IntEnum};
 use std::{
     io::{stdin, stdout, Read, Stdout, Write},
     net::TcpStream,
 };
 use structopt::StructOpt;
 use tui::{backend::CrosstermBackend, Terminal};
+use rpi_led_remote::Opt;
 
 mod audio;
-
-#[derive(Clone, Debug, StructOpt)]
-struct Opt {
-    /// Address to bind to
-    address: String,
-
-    /// A pattern to help take the right device
-    /// Enabling this means disabling the manual selection of device
-    #[structopt(short, long)]
-    device_pattern: Option<String>,
-
-    #[structopt(long)]
-    only_color: bool,
-
-    #[structopt(long)]
-    only_intensity: bool,
-
-    #[structopt(long)]
-    color_and_intensity: bool,
-}
+mod app;
 
 fn main() -> anyhow::Result<()> {
     let opt: Opt = Opt::from_args();
@@ -48,30 +29,14 @@ fn main() -> anyhow::Result<()> {
     };
     println!("Mode selected: {:?}", mode);
 
+    // Socket
+    let mut socket = setup_socket(&opt, mode)?;
+
     // Audio stuff
-    let device = get_device(opt.device_pattern.as_ref().map(|s| s as &str).unwrap_or(""))?;
+    let device = get_device(opt.device_hint.as_ref().map(|s| s as &str).unwrap_or(""))?;
     println!("Found audio device {}", device.name()?);
 
     let config = device.default_input_config()?;
-
-    // Setup socket
-    let mut socket = TcpStream::connect(opt.address)?;
-    println!("Connected to {}", socket.peer_addr()?);
-
-    // Hello
-    let magic = socket.read_u8()?;
-    assert_eq!(magic, MAGIC);
-
-    // Mode
-    socket.write_u8(mode.int_value())?;
-
-    match mode {
-        LedMode::OnlyColor => {
-            socket.write_f32::<BigEndian>(1.0)?;
-        }
-        LedMode::OnlyIntensity => socket.write_all(&[255, 0, 0])?,
-        _ => todo!(),
-    }
 
     // Audio processor
     let mut processor = AudioProcessor::new(100_000);
@@ -113,6 +78,29 @@ fn setup_tui() -> anyhow::Result<Terminal<CrosstermBackend<Stdout>>> {
     let backend = CrosstermBackend::new(stdout);
     let terminal = Terminal::new(backend)?;
     Ok(terminal)
+}
+
+fn setup_socket(opt: &Opt, mode: LedMode) -> anyhow::Result<TcpStream> {
+    // Setup socket
+    let mut socket = TcpStream::connect(opt.address.as_ref().unwrap())?;
+    println!("Connected to {}", socket.peer_addr()?);
+
+    // Hello
+    let magic = socket.read_u8()?;
+    assert_eq!(magic, MAGIC);
+
+    // Mode
+    socket.write_u8(mode.int_value())?;
+
+    match mode {
+        LedMode::OnlyColor => {
+            socket.write_f32::<BigEndian>(1.0)?;
+        }
+        LedMode::OnlyIntensity => socket.write_all(&[255, 0, 0])?,
+        _ => todo!(),
+    }
+
+    Ok(socket)
 }
 
 fn get_device(hint: &str) -> anyhow::Result<Device> {
