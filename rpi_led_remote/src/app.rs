@@ -135,7 +135,6 @@ impl App {
 
                 let raw_graph = {
                     let raw_dataset = Dataset::default()
-                        .name("Raw PCM")
                         .marker(Marker::Braille)
                         .graph_type(GraphType::Line)
                         .style(Style::default().fg(Color::LightGreen))
@@ -149,16 +148,15 @@ impl App {
 
                 let fft_graph = {
                     let fft_dataset = Dataset::default()
-                        .name("FFT")
                         .marker(Marker::Braille)
                         .graph_type(GraphType::Line)
                         .style(Style::default().fg(Color::LightBlue))
                         .data(fft_data);
 
                     Chart::new(vec![fft_dataset])
-                        .block(Block::default().title(" FFT Data ").borders(Borders::ALL))
+                        .block(Block::default().title(" FFT Data Magnitude - log10 ").borders(Borders::ALL))
                         .x_axis(Axis::default().bounds([0.0, fft_data.len() as f64]))
-                        .y_axis(Axis::default().bounds([-2000.0, 2000.0]))
+                        .y_axis(Axis::default().bounds([0.0, 5.0]))
                 };
 
                 let mut bars_data = vec![(" I ", intensity as _)];
