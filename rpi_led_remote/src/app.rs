@@ -14,10 +14,11 @@ use tui::Terminal;
 use tui::backend::CrosstermBackend;
 use parking_lot::{Mutex, Condvar};
 use ringbuf::{RingBuffer, Consumer};
-use tui::widgets::{Block, Borders, Dataset, GraphType, Chart, Axis};
+use tui::widgets::{Block, Borders, Dataset, GraphType, Chart, Axis, Sparkline, BarChart, Gauge};
 use tui::symbols::Marker;
-use tui::style::{Style, Color};
+use tui::style::{Style, Color, Modifier};
 use std::cmp::Ordering;
+use tui::layout::{Layout, Direction, Constraint};
 
 pub struct App {
     opt: Opt,
@@ -87,10 +88,10 @@ impl App {
         Ok(())
     }
 
-    pub fn create_audio_stream(&self) -> Result<(Stream, Consumer<i16>)> {
+    pub fn create_audio_stream(&self, size: usize) -> Result<(Stream, Consumer<i16>)> {
         let config = self.audio_device.default_input_config()?;
 
-        let (mut prod, cons) = RingBuffer::new(40_000).split();
+        let (mut prod, cons) = RingBuffer::new(size).split();
 
         let reader = self.audio_device.build_input_stream(
             &config.into(),
@@ -103,33 +104,70 @@ impl App {
         Ok((reader, cons))
     }
 
-    pub fn draw(&mut self, raw_data: &[(f64, f64)], fft_data: &[(f64, f64)]) {
+    pub fn draw(&mut self, raw_data: &[(f64, f64)], fft_data: &[(f64, f64)], intensity: f64, max_intensity: f64, classes: &[f64]) {
         self.tui.draw(|frame| {
 
-            let raw_dataset = Dataset::default()
-                .name("Raw PCM")
-                .marker(Marker::Braille)
-                .graph_type(GraphType::Line)
-                .style(Style::default().fg(Color::LightGreen))
-                .data(raw_data);
+            let main_layout = Layout::default()
+                .direction(Direction::Horizontal)
+                .constraints([Constraint::Min(10), Constraint::Length((3 * (classes.len() + 2) + classes.len()) as u16)].as_ref())
+                .split(frame.size());
 
-            let fft_dataset = Dataset::default()
-                .name("FFT")
-                .marker(Marker::Braille)
-                .graph_type(GraphType::Line)
-                .style(Style::default().fg(Color::LightBlue))
-                .data(fft_data);
+            let graph_layout = Layout::default()
+                .direction(Direction::Vertical)
+                .constraints([Constraint::Percentage(50), Constraint::Percentage(50)].as_ref())
+                .split(main_layout[0]);
 
-            let chart = Chart::new(vec![raw_dataset, fft_dataset])
-                .block(Block::default().title("My chart").borders(Borders::ALL))
-                .x_axis(Axis::default()
-                    .title("i")
-                    .bounds([0.0, raw_data.len() as f64]))
-                .y_axis(Axis::default()
-                    .title("PCM")
-                    .bounds([-2000.0, 2000.0]));
+            let raw_graph = {
+                let raw_dataset = Dataset::default()
+                    .name("Raw PCM")
+                    .marker(Marker::Braille)
+                    .graph_type(GraphType::Line)
+                    .style(Style::default().fg(Color::LightGreen))
+                    .data(raw_data);
 
-            frame.render_widget(chart, frame.size());
-        });
+                Chart::new(vec![raw_dataset])
+                    .block(Block::default().title(" PCM Data ").borders(Borders::ALL))
+                    .x_axis(Axis::default()
+                        .bounds([0.0, raw_data.len() as f64]))
+                    .y_axis(Axis::default()
+                        .bounds([-2000.0, 2000.0]))
+            };
+
+            let fft_graph = {
+                let fft_dataset = Dataset::default()
+                    .name("FFT")
+                    .marker(Marker::Braille)
+                    .graph_type(GraphType::Line)
+                    .style(Style::default().fg(Color::LightBlue))
+                    .data(fft_data);
+
+                Chart::new(vec![fft_dataset])
+                    .block(Block::default().title(" FFT Data ").borders(Borders::ALL))
+                    .x_axis(Axis::default()
+                        .bounds([0.0, fft_data.len() as f64]))
+                    .y_axis(Axis::default()
+                        .bounds([-2000.0, 2000.0]))
+            };
+
+            let mut bars_data = vec![(" I ", intensity as _)];
+            let mut names = classes.iter().enumerate()
+                .map(|(i, _)| format!(" {} ", i))
+                .collect::<Vec<_>>();
+            for (i, &class) in classes.iter().enumerate() {
+                bars_data.push((names[i].as_str(), class as _));
+            }
+
+            let bars = {
+                BarChart::default()
+                    .block(Block::default().title(" Output Data ").borders(Borders::ALL))
+                    .bar_width(3)
+                    .max(max_intensity as _)
+                    .data(&bars_data)
+            };
+
+            frame.render_widget(raw_graph, graph_layout[0]);
+            frame.render_widget(fft_graph, graph_layout[1]);
+            frame.render_widget(bars, main_layout[1]);
+        }).unwrap();
     }
 }
