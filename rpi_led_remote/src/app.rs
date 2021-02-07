@@ -1,24 +1,27 @@
-use std::net::TcpStream;
 use crate::Opt;
-use anyhow::Result;
-use byteorder::{ReadBytesExt, WriteBytesExt, BigEndian};
-use rpi_led_common::{MAGIC, LedMode, IntEnum};
-use std::io::{Write, Stdout, stdout};
-use cpal::traits::{DeviceTrait, HostTrait};
-use anyhow::{anyhow, ensure, bail};
-use std::fs::read;
+use anyhow::{anyhow, bail, ensure, Result};
+use byteorder::{ReadBytesExt, WriteBytesExt};
+use cpal::{
+    traits::{DeviceTrait, HostTrait},
+    Stream,
+};
+use parking_lot::Mutex;
+use ringbuf::{Consumer, RingBuffer};
+use rpi_led_common::{IntEnum, LedMode, MAGIC};
+use std::{
+    io::{stdout, Stdout},
+    net::TcpStream,
+    sync::Arc,
+};
 use structopt::StructOpt;
-use cpal::{InputCallbackInfo, Stream, StreamInstant};
-use std::sync::{Arc, Barrier};
-use tui::Terminal;
-use tui::backend::CrosstermBackend;
-use parking_lot::{Mutex, Condvar};
-use ringbuf::{RingBuffer, Consumer};
-use tui::widgets::{Block, Borders, Dataset, GraphType, Chart, Axis, Sparkline, BarChart, Gauge};
-use tui::symbols::Marker;
-use tui::style::{Style, Color, Modifier};
-use std::cmp::Ordering;
-use tui::layout::{Layout, Direction, Constraint};
+use tui::{
+    backend::CrosstermBackend,
+    layout::{Constraint, Direction, Layout},
+    style::{Color, Style},
+    symbols::Marker,
+    widgets::{Axis, BarChart, Block, Borders, Chart, Dataset, GraphType},
+    Terminal,
+};
 
 pub struct App {
     opt: Opt,
@@ -98,76 +101,92 @@ impl App {
             move |data: &[i16], info| {
                 prod.push_slice(data);
             },
-            |e| eprintln!("CPAL Error: {:?}", e)
+            |e| eprintln!("CPAL Error: {:?}", e),
         )?;
 
         Ok((reader, cons))
     }
 
-    pub fn draw(&mut self, raw_data: &[(f64, f64)], fft_data: &[(f64, f64)], intensity: f64, max_intensity: f64, classes: &[f64]) {
-        self.tui.draw(|frame| {
+    pub fn draw(
+        &mut self,
+        raw_data: &[(f64, f64)],
+        fft_data: &[(f64, f64)],
+        intensity: f64,
+        max_intensity: f64,
+        classes: &[f64],
+    ) {
+        self.tui
+            .draw(|frame| {
+                let main_layout = Layout::default()
+                    .direction(Direction::Horizontal)
+                    .constraints(
+                        [
+                            Constraint::Min(10),
+                            Constraint::Length((3 * (classes.len() + 2) + classes.len()) as u16),
+                        ]
+                        .as_ref(),
+                    )
+                    .split(frame.size());
 
-            let main_layout = Layout::default()
-                .direction(Direction::Horizontal)
-                .constraints([Constraint::Min(10), Constraint::Length((3 * (classes.len() + 2) + classes.len()) as u16)].as_ref())
-                .split(frame.size());
+                let graph_layout = Layout::default()
+                    .direction(Direction::Vertical)
+                    .constraints([Constraint::Percentage(50), Constraint::Percentage(50)].as_ref())
+                    .split(main_layout[0]);
 
-            let graph_layout = Layout::default()
-                .direction(Direction::Vertical)
-                .constraints([Constraint::Percentage(50), Constraint::Percentage(50)].as_ref())
-                .split(main_layout[0]);
+                let raw_graph = {
+                    let raw_dataset = Dataset::default()
+                        .name("Raw PCM")
+                        .marker(Marker::Braille)
+                        .graph_type(GraphType::Line)
+                        .style(Style::default().fg(Color::LightGreen))
+                        .data(raw_data);
 
-            let raw_graph = {
-                let raw_dataset = Dataset::default()
-                    .name("Raw PCM")
-                    .marker(Marker::Braille)
-                    .graph_type(GraphType::Line)
-                    .style(Style::default().fg(Color::LightGreen))
-                    .data(raw_data);
+                    Chart::new(vec![raw_dataset])
+                        .block(Block::default().title(" PCM Data ").borders(Borders::ALL))
+                        .x_axis(Axis::default().bounds([0.0, raw_data.len() as f64]))
+                        .y_axis(Axis::default().bounds([-2000.0, 2000.0]))
+                };
 
-                Chart::new(vec![raw_dataset])
-                    .block(Block::default().title(" PCM Data ").borders(Borders::ALL))
-                    .x_axis(Axis::default()
-                        .bounds([0.0, raw_data.len() as f64]))
-                    .y_axis(Axis::default()
-                        .bounds([-2000.0, 2000.0]))
-            };
+                let fft_graph = {
+                    let fft_dataset = Dataset::default()
+                        .name("FFT")
+                        .marker(Marker::Braille)
+                        .graph_type(GraphType::Line)
+                        .style(Style::default().fg(Color::LightBlue))
+                        .data(fft_data);
 
-            let fft_graph = {
-                let fft_dataset = Dataset::default()
-                    .name("FFT")
-                    .marker(Marker::Braille)
-                    .graph_type(GraphType::Line)
-                    .style(Style::default().fg(Color::LightBlue))
-                    .data(fft_data);
+                    Chart::new(vec![fft_dataset])
+                        .block(Block::default().title(" FFT Data ").borders(Borders::ALL))
+                        .x_axis(Axis::default().bounds([0.0, fft_data.len() as f64]))
+                        .y_axis(Axis::default().bounds([-2000.0, 2000.0]))
+                };
 
-                Chart::new(vec![fft_dataset])
-                    .block(Block::default().title(" FFT Data ").borders(Borders::ALL))
-                    .x_axis(Axis::default()
-                        .bounds([0.0, fft_data.len() as f64]))
-                    .y_axis(Axis::default()
-                        .bounds([-2000.0, 2000.0]))
-            };
+                let mut bars_data = vec![(" I ", intensity as _)];
+                let names = classes
+                    .iter()
+                    .enumerate()
+                    .map(|(i, _)| format!(" {} ", i))
+                    .collect::<Vec<_>>();
+                for (i, &class) in classes.iter().enumerate() {
+                    bars_data.push((names[i].as_str(), class as _));
+                }
 
-            let mut bars_data = vec![(" I ", intensity as _)];
-            let mut names = classes.iter().enumerate()
-                .map(|(i, _)| format!(" {} ", i))
-                .collect::<Vec<_>>();
-            for (i, &class) in classes.iter().enumerate() {
-                bars_data.push((names[i].as_str(), class as _));
-            }
+                let bars = {
+                    BarChart::default()
+                        .block(
+                            Block::default()
+                                .title(" Output Data ")
+                                .borders(Borders::ALL),
+                        )
+                        .bar_width(3)
+                        .max(max_intensity as _)
+                        .data(&bars_data)
+                };
 
-            let bars = {
-                BarChart::default()
-                    .block(Block::default().title(" Output Data ").borders(Borders::ALL))
-                    .bar_width(3)
-                    .max(max_intensity as _)
-                    .data(&bars_data)
-            };
-
-            frame.render_widget(raw_graph, graph_layout[0]);
-            frame.render_widget(fft_graph, graph_layout[1]);
-            frame.render_widget(bars, main_layout[1]);
-        }).unwrap();
+                frame.render_widget(raw_graph, graph_layout[0]);
+                frame.render_widget(fft_graph, graph_layout[1]);
+                frame.render_widget(bars, main_layout[1]);
+            })
+            .unwrap();
     }
 }

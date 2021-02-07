@@ -1,14 +1,14 @@
-use rpi_led_remote::app::App;
-use std::thread::sleep;
-use std::time::{Duration, Instant};
 use cpal::traits::StreamTrait;
-use parking_lot::Mutex;
-use cpal::StreamInstant;
 use realfft::RealFftPlanner;
-use std::cmp::Ordering;
+use rpi_led_remote::app::App;
+use std::{
+    cmp::Ordering,
+    thread::sleep,
+    time::{Duration, Instant},
+};
 
 fn main() -> anyhow::Result<()> {
-    let mut app = App::new()?;
+    let app = App::new()?;
     let mut app = app.lock();
 
     app.init_network()?;
@@ -39,10 +39,13 @@ fn main() -> anyhow::Result<()> {
             raw_data.reserve_exact(cons.len());
 
             // Raw data
-            cons.pop_each(|sample| {
-                raw_data.push(sample as f64);
-                true
-            }, Some(SAMPLE_SIZE));
+            cons.pop_each(
+                |sample| {
+                    raw_data.push(sample as f64);
+                    true
+                },
+                Some(SAMPLE_SIZE),
+            );
 
             // Display raw data
             raw_data_display.clear();
@@ -65,14 +68,20 @@ fn main() -> anyhow::Result<()> {
             }
 
             // Intensity
-            let intensity = fft_data.iter().map(|c| c.re.abs()).sum::<f64>() / fft_data.len() as f64;
+            let intensity =
+                fft_data.iter().map(|c| c.re.abs()).sum::<f64>() / fft_data.len() as f64;
             let intensity = 10.0 * intensity.log10() - 10.0;
 
             // Separate classes
 
             // Combine stereo data
             let mut fft_combined = Vec::with_capacity(fft_data.len() / 2 - DISCARDED_FREQ);
-            for (i, freq_left) in fft_data.iter().copied().enumerate().take(fft_data.len() / 2 - DISCARDED_FREQ) {
+            for (i, freq_left) in fft_data
+                .iter()
+                .copied()
+                .enumerate()
+                .take(fft_data.len() / 2 - DISCARDED_FREQ)
+            {
                 let freq_right = fft_data[fft_data.len() - i - 1];
                 let freq_combined = (freq_left.re.abs() + freq_right.re.abs()) / 2.0;
                 fft_combined.push(freq_combined);
@@ -80,10 +89,9 @@ fn main() -> anyhow::Result<()> {
 
             // Compute classes
             let class_effective = fft_combined.len() / AMOUNT_CLASSES;
-            let classes = fft_combined.chunks_exact(class_effective)
-                .map(|chunk| {
-                    chunk.iter().copied().sum::<f64>() / chunk.len() as f64
-                })
+            let classes = fft_combined
+                .chunks_exact(class_effective)
+                .map(|chunk| chunk.iter().copied().sum::<f64>() / chunk.len() as f64)
                 .map(|class| 10.0 * class.log10() - 10.0)
                 .collect::<Vec<_>>();
 
@@ -97,13 +105,17 @@ fn main() -> anyhow::Result<()> {
                 max_intensity = max_class;
             }
 
-            app.draw(&raw_data_display, &fft_data_display, intensity, max_intensity, &classes);
+            app.draw(
+                &raw_data_display,
+                &fft_data_display,
+                intensity,
+                max_intensity,
+                &classes,
+            );
         }
 
         let time = Instant::now().duration_since(start).as_micros();
 
         sleep(Duration::from_millis(33));
     }
-
-    Ok(())
 }

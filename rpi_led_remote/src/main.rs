@@ -5,17 +5,17 @@ use cpal::{
     traits::{DeviceTrait, HostTrait, StreamTrait},
     Device,
 };
-use rpi_led_common::{LedMode, MAGIC, IntEnum};
+use rpi_led_common::{IntEnum, LedMode, MAGIC};
+use rpi_led_remote::Opt;
 use std::{
     io::{stdin, stdout, Read, Stdout, Write},
     net::TcpStream,
 };
 use structopt::StructOpt;
 use tui::{backend::CrosstermBackend, Terminal};
-use rpi_led_remote::Opt;
 
-mod audio;
 mod app;
+mod audio;
 
 fn main() -> anyhow::Result<()> {
     let opt: Opt = Opt::from_args();
