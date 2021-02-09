@@ -12,7 +12,7 @@ fn main() -> anyhow::Result<()> {
 
     app.init_network()?;
 
-    const SAMPLE_SIZE: usize = 2048;
+    const SAMPLE_SIZE: usize = 4096;
 
     let (stream, mut cons) = app.create_audio_stream(SAMPLE_SIZE * 2)?;
 
@@ -22,11 +22,11 @@ fn main() -> anyhow::Result<()> {
     let fft = planner.plan_fft_forward(SAMPLE_SIZE);
 
     let mut raw_data = fft.make_input_vec();
-    let mut raw_data_display = Vec::new();
-    raw_data_display.resize(raw_data.len(), (0.0, 0.0));
+    let mut raw_data_display = vec![(0.0, 0.0); raw_data.len()];
     let mut fft_data = fft.make_output_vec();
-    let mut fft_data_display = Vec::new();
-    fft_data_display.resize(fft_data.len(), (0.0, 0.0));
+    let mut fft_data_display = vec![(0.0, 0.0); fft_data.len() / 2];
+
+    let mut max_data = 0.0;
     let mut max_intensity = 0.0;
 
     let amount_classes: usize = (SAMPLE_SIZE as f32 / 2.0 + 1.0).log2() as usize;
@@ -40,14 +40,17 @@ fn main() -> anyhow::Result<()> {
             // Raw data
             cons.pop_each(
                 |sample| {
-                    raw_data.push(sample as f64);
+                    let sample = sample as f64;
+                    if sample.abs() > max_data {
+                        max_data = sample.abs() + 1000.0;
+                    }
+                    raw_data.push(sample);
                     true
                 },
                 Some(SAMPLE_SIZE),
             );
 
             // Display raw data
-
             for (i, sample) in raw_data.iter().enumerate() {
                 raw_data_display[i] = (i as _, *sample);
             }
@@ -56,8 +59,7 @@ fn main() -> anyhow::Result<()> {
             fft.process(&mut raw_data, &mut fft_data).unwrap();
 
             // Display FFT
-
-            for (i, complex) in fft_data.iter().enumerate() {
+            for (i, complex) in fft_data.iter().enumerate().take(fft_data_display.len()) {
                 let val = complex.scale(1.0 / (fft_data.len() as f64).sqrt());
                 fft_data_display[i] = (i as _, val.norm().log10())
             }
@@ -76,19 +78,19 @@ fn main() -> anyhow::Result<()> {
                     buckets[bucket_index] = val;
                 }
             }*/
-            let buckets_ranges = [0.0, 19.0, 100.0, 400.0, 2600.0, 5200.0];
+            let buckets_ranges = [19.0, 100.0, 400.0, 2600.0, 5200.0, f32::MAX];
             let mut buckets = vec![0.0; buckets_ranges.len()];
-            for (i, sample) in fft_data.iter().enumerate() {
-                let freq = i as f32 * 44100.0 / 2048 as f32;
-                let val = 1000.0 * (sample.norm());
 
-                for (i, range) in buckets_ranges.iter().copied().enumerate() {
-                    if freq > range {
-                        continue;
-                    } else if val > buckets[i] {
-                        buckets[i] = val;
-                        break;
-                    }
+            let mut active_bucket = 0;
+            for (i, sample) in fft_data.iter().take(fft_data_display.len()).enumerate() {
+                let freq = i as f32 * 44100.0 / SAMPLE_SIZE as f32;
+                if freq > buckets_ranges[active_bucket] {
+                    active_bucket += 1;
+                }
+
+                let val = 1000.0 * (sample.norm().log10() - 2.0);
+                if val > buckets[active_bucket] {
+                    buckets[active_bucket] = val;
                 }
             }
 
@@ -120,6 +122,7 @@ fn main() -> anyhow::Result<()> {
                 &raw_data_display,
                 &fft_data_display,
                 intensity,
+                max_data,
                 max_intensity,
                 &buckets,
             );

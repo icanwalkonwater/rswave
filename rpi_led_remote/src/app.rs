@@ -112,6 +112,7 @@ impl App {
         raw_data: &[(f64, f64)],
         fft_data: &[(f64, f64)],
         intensity: f64,
+        max_data: f64,
         max_intensity: f64,
         classes: &[f64],
     ) {
@@ -143,7 +144,7 @@ impl App {
                     Chart::new(vec![raw_dataset])
                         .block(Block::default().title(" PCM Data ").borders(Borders::ALL))
                         .x_axis(Axis::default().bounds([0.0, raw_data.len() as f64]))
-                        .y_axis(Axis::default().bounds([-2000.0, 2000.0]))
+                        .y_axis(Axis::default().bounds([-max_data, max_data]))
                 };
 
                 let fft_graph = {
