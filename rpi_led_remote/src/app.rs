@@ -155,9 +155,13 @@ impl App {
                         .data(fft_data);
 
                     Chart::new(vec![fft_dataset])
-                        .block(Block::default().title(" FFT Data Magnitude - log10 ").borders(Borders::ALL))
+                        .block(
+                            Block::default()
+                                .title(" FFT Data Magnitude - log2 ")
+                                .borders(Borders::ALL),
+                        )
                         .x_axis(Axis::default().bounds([0.0, fft_data.len() as f64]))
-                        .y_axis(Axis::default().bounds([0.0, 5.0]))
+                        .y_axis(Axis::default().bounds([0.0, 20.0]))
                 };
 
                 let mut bars_data = vec![(" I ", intensity as _)];

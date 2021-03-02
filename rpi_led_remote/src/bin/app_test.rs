@@ -2,6 +2,7 @@ use cpal::traits::StreamTrait;
 use realfft::RealFftPlanner;
 use rpi_led_remote::app::App;
 use std::{
+    f64::consts::PI,
     thread::sleep,
     time::{Duration, Instant},
 };
@@ -21,6 +22,11 @@ fn main() -> anyhow::Result<()> {
     let mut planner = RealFftPlanner::new();
     let fft = planner.plan_fft_forward(SAMPLE_SIZE);
 
+    let hann_window = (0..SAMPLE_SIZE)
+        .into_iter()
+        .map(|i| 0.5 * (1.0 - (2.0 * PI * i as f64 / (SAMPLE_SIZE as f64 - 1.0)).cos()))
+        .collect::<Vec<_>>();
+
     let mut raw_data = fft.make_input_vec();
     let mut raw_data_display = vec![(0.0, 0.0); raw_data.len()];
     let mut fft_data = fft.make_output_vec();
@@ -28,8 +34,6 @@ fn main() -> anyhow::Result<()> {
 
     let mut max_data = 0.0;
     let mut max_intensity = 0.0;
-
-    let amount_classes: usize = (SAMPLE_SIZE as f32 / 2.0 + 1.0).log2() as usize;
 
     loop {
         let start = Instant::now();
@@ -40,7 +44,7 @@ fn main() -> anyhow::Result<()> {
             // Raw data
             cons.pop_each(
                 |sample| {
-                    let sample = sample as f64;
+                    let sample = sample as f64 * hann_window[raw_data.len()];
                     if sample.abs() > max_data {
                         max_data = sample.abs() + 1000.0;
                     }
@@ -61,7 +65,7 @@ fn main() -> anyhow::Result<()> {
             // Display FFT
             for (i, complex) in fft_data.iter().enumerate().take(fft_data_display.len()) {
                 let val = complex.scale(1.0 / (fft_data.len() as f64).sqrt());
-                fft_data_display[i] = (i as _, val.norm().log10())
+                fft_data_display[i] = (i as _, val.norm().log2())
             }
 
             // Intensity
@@ -94,7 +98,11 @@ fn main() -> anyhow::Result<()> {
                 }
             }
 
-            let max_bucket = buckets.iter().copied().max_by(|a, b| a.partial_cmp(b).unwrap()).unwrap_or(0.0);
+            let max_bucket = buckets
+                .iter()
+                .copied()
+                .max_by(|a, b| a.partial_cmp(b).unwrap())
+                .unwrap_or(0.0);
             if max_bucket > max_intensity {
                 max_intensity = max_bucket;
             }
