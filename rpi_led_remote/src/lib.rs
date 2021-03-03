@@ -1,6 +1,7 @@
 use structopt::StructOpt;
 
 pub mod app;
+pub mod audio;
 
 #[derive(Clone, Debug, StructOpt)]
 pub struct Opt {
@@ -11,13 +12,4 @@ pub struct Opt {
     /// Enabling this means disabling the manual selection of device
     #[structopt(short, long)]
     pub device_hint: Option<String>,
-
-    #[structopt(long)]
-    pub only_color: bool,
-
-    #[structopt(long)]
-    pub only_intensity: bool,
-
-    #[structopt(long)]
-    pub color_and_intensity: bool,
 }

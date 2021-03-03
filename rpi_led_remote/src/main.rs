@@ -21,12 +21,13 @@ fn main() -> anyhow::Result<()> {
     let opt: Opt = Opt::from_args();
 
     // Mode
-    let mode = match (opt.only_color, opt.only_intensity) {
+    /*let mode = match (opt.only_color, opt.only_intensity) {
         (true, false) => LedMode::OnlyColor,
         (false, true) => LedMode::OnlyIntensity,
         (false, false) => bail!("You must choose a mode !"),
         _ => bail!("Only one mode can be active at a time !"),
-    };
+    };*/
+    let mode = LedMode::OnlyColor;
     println!("Mode selected: {:?}", mode);
 
     // Socket
@@ -39,11 +40,12 @@ fn main() -> anyhow::Result<()> {
     let config = device.default_input_config()?;
 
     // Audio processor
-    let mut processor = AudioProcessor::new(100_000);
+    let mut processor = AudioProcessor::default();
     let reader = device.build_input_stream(
         &config.into(),
         move |data: &[i16], _| {
-            let intensity = processor.update(data);
+            // let intensity = processor.update(data);
+            let intensity = 0.0;
 
             match mode {
                 LedMode::OnlyColor => {
