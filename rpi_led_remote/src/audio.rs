@@ -70,7 +70,7 @@ impl AudioProcessor {
 
             output: vec![],
 
-            bar_cutoff_first: 0.04,
+            bar_cutoff_first: 0.03,
             bar_cutoff_second: 0.25,
             bars_data: [(0.0, 0..0), (0.0, 0..0), (0.0, 0..0)],
 
@@ -255,10 +255,18 @@ impl AudioProcessor {
 
     #[inline]
     fn compute_bar(&self, range: Range<usize>) -> f64 {
-        range
+        let mut tmp = range.into_iter()
+            .map(|i| self.output[i])
+            .collect::<Vec<_>>();
+
+        tmp.sort_unstable_by(|a, b| a.partial_cmp(b).unwrap());
+        tmp[(0.9 * tmp.len() as f32) as usize]
+
+        // Max
+        /*range
             .into_iter()
             .map(|i| self.output[i])
             .max_by(|a, b| a.partial_cmp(b).unwrap())
-            .unwrap()
+            .unwrap()*/
     }
 }
