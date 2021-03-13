@@ -24,6 +24,9 @@ use tui::{
     widgets::{Axis, Block, Borders, Chart, Dataset, Gauge, GraphType, Paragraph},
     Terminal,
 };
+use std::cmp::Ordering;
+use crate::audio::COMPRESSION_CONST;
+use crate::spotify::SpotifyTracker;
 
 struct AudioHolder {
     device: cpal::Device,
@@ -38,12 +41,22 @@ pub struct App {
     audio: AudioHolder,
     tui: Terminal<CrosstermBackend<Stdout>>,
 
+    spotify: SpotifyTracker,
+
     run_time: Duration,
+    draw_time: Duration,
+    last_run_end: Instant,
+    spare_time: Duration,
 }
 
 impl App {
-    pub fn new() -> Result<Arc<Mutex<Self>>> {
+    pub async fn new() -> Result<Arc<Mutex<Self>>> {
         let opt: Opt = Opt::from_args();
+
+        match (opt.spotify_id.as_ref(), opt.spotify_secret.as_ref()) {
+            (Some(_), Some(_)) | (None, None) => {},
+            _ => return Err(anyhow!("You must provide --spotify-id and --spotify-secret or neither !")),
+        }
 
         // Create socket if specified
         let socket = if let Some(address) = opt.address.as_ref() {
@@ -66,6 +79,10 @@ impl App {
         };
 
         let mut tui = Terminal::new(CrosstermBackend::new(stdout()))?;
+
+        let spotify = SpotifyTracker::new(opt.spotify_id.as_ref().unwrap(), opt.spotify_secret.as_ref().unwrap()).await?;
+
+        // Clear terminal just before creating the app
         tui.clear()?;
 
         Ok(Arc::new(Mutex::new(Self {
@@ -78,7 +95,11 @@ impl App {
                 processor: Default::default(),
             },
             tui,
+            spotify,
             run_time: Duration::from_millis(0),
+            draw_time: Duration::from_millis(0),
+            last_run_end: Instant::now(),
+            spare_time: Duration::from_millis(0),
         })))
     }
 
@@ -164,8 +185,9 @@ impl App {
         })
     }
 
-    pub fn run_once(&mut self) -> Result<()> {
+    pub async fn run_once(&mut self) -> Result<()> {
         let start = Instant::now();
+        self.spare_time = start.duration_since(self.last_run_end);
 
         if let None = self.audio.stream {
             self.recreate_audio_stream()?;
@@ -182,19 +204,28 @@ impl App {
         self.audio.processor.process();
         // That was easy
 
+        // Refresh spotify
+        self.spotify.refresh_current_track().await;
+        self.spotify.advance_beat();
+
         // Time
         self.run_time = Instant::now().duration_since(start);
+        self.last_run_end = Instant::now();
         Ok(())
     }
 
     pub fn draw(&mut self) {
+        let start = Instant::now();
+
+        // Curve data
+
         let raw_data = self
             .audio
             .processor
             .input()
             .chunks_exact(2)
             .enumerate()
-            .map(|(i, slice)| (i as f64, slice[0].max(slice[1])))
+            .map(|(i, slice)| (i as f64, (slice[0] + slice[1]) / 2.0))
             .collect::<Vec<_>>();
 
         let fft_data = self
@@ -207,26 +238,28 @@ impl App {
             .map(|(i, sample)| (i as f64, sample))
             .collect::<Vec<_>>();
 
-        let max_data = self.audio.processor.peak_input() * 1.5;
+        let last_novelty = self.audio.processor.novelty();
+        let novelty_data = self.audio.processor.novelty_curve()
+            .enumerate()
+            .map(|(i, val)| (i as f64, val))
+            .collect::<Vec<(f64, f64)>>();
+
+        // Some max for display
+
+        let max_data = self.audio.processor.peak_input() * 1.1;
         let max_fft = self.audio.processor.peak_output() * 1.2;
-
-        let mut bar_data = Vec::with_capacity(6);
-        for (bar, range) in self.audio.processor.bars_data() {
-            bar_data.push((range.start as f64, *bar));
-            bar_data.push((range.end as f64 - 1.0, *bar));
-        }
-
-        let deltas = self
-            .audio
-            .processor
-            .deltas()
-            .iter()
-            .fold((0.0, 0.0, 0.0), |acc, bar| {
-                (acc.0 + bar[0], acc.1 + bar[1], acc.2 + bar[2])
-            });
-        let peak_delta = self.audio.processor.peak_delta() * 2.0;
+        let max_novelty = self.audio.processor.novelty_curve()
+            .max_by(|a, b| a.partial_cmp(b).unwrap_or(Ordering::Equal))
+            .unwrap_or(0.0);
 
         let run_time_micros = self.run_time.as_micros();
+        let draw_time_micros = self.draw_time.as_micros();
+        let spare_time_millis = self.spare_time.as_millis();
+
+        // Spotify info
+        let current_track = self.spotify.current_track();
+        let tempo = self.spotify.tempo();
+        let is_beat = self.spotify.is_beat();
 
         self.tui
             .draw(|frame| {
@@ -237,7 +270,7 @@ impl App {
 
                 let graph_layout = Layout::default()
                     .direction(Direction::Vertical)
-                    .constraints([Constraint::Percentage(50), Constraint::Percentage(50)].as_ref())
+                    .constraints([Constraint::Ratio(1, 3), Constraint::Ratio(1, 3), Constraint::Ratio(1, 3)].as_ref())
                     .split(main_layout[0]);
 
                 let raw_graph = {
@@ -250,7 +283,7 @@ impl App {
                     Chart::new(vec![raw_dataset])
                         .block(
                             Block::default()
-                                .title(" PCM Data - Max L/R ")
+                                .title(format!(" PCM Data - Avg L/R - {} samples ", raw_data.len()))
                                 .borders(Borders::ALL),
                         )
                         .x_axis(Axis::default().bounds([0.0, raw_data.len() as f64]))
@@ -264,20 +297,31 @@ impl App {
                         .style(Style::default().fg(Color::LightBlue))
                         .data(&fft_data);
 
-                    let bar_dataset = Dataset::default()
-                        .marker(Marker::Braille)
-                        .graph_type(GraphType::Line)
-                        .style(Style::default().fg(Color::Yellow))
-                        .data(&bar_data);
-
-                    Chart::new(vec![fft_dataset, bar_dataset])
+                    Chart::new(vec![fft_dataset])
                         .block(
                             Block::default()
-                                .title(" FFT Data Magnitude - log2 ")
+                                .title(format!(" FFT Data Magnitude - Compression: {} - {} samples ", COMPRESSION_CONST, fft_data.len()))
                                 .borders(Borders::ALL),
                         )
                         .x_axis(Axis::default().bounds([0.0, fft_data.len() as f64]))
                         .y_axis(Axis::default().bounds([0.0, max_fft]))
+                };
+
+                let novelty_graph = {
+                    let novelty_dataset = Dataset::default()
+                        .marker(Marker::Braille)
+                        .graph_type(GraphType::Line)
+                        .style(Style::default().fg(Color::Yellow))
+                        .data(&novelty_data);
+
+                    Chart::new(vec![novelty_dataset])
+                        .block(
+                            Block::default()
+                                .title(format!(" Novelty Curve - Max: {:.2} - Current: {:.2} ", max_novelty, last_novelty))
+                                .borders(Borders::ALL),
+                        )
+                        .x_axis(Axis::default().bounds([0.0, novelty_data.len() as f64]))
+                        .y_axis(Axis::default().bounds([0.0, max_novelty * 1.1]))
                 };
 
                 let output_data_layout = Layout::default()
@@ -285,22 +329,36 @@ impl App {
                     .constraints(
                         [
                             Constraint::Length(3),
-                            Constraint::Length(3),
-                            Constraint::Length(2),
-                            Constraint::Length(3),
+                            Constraint::Length(4),
                             Constraint::Min(1),
                         ]
                         .as_ref(),
                     )
                     .split(main_layout[1]);
 
+                let bold = Style::default().add_modifier(Modifier::BOLD);
+
                 let status = {
                     let text = vec![Spans::from(vec![
                         Span::styled(
                             " Process time: ",
-                            Style::default().add_modifier(Modifier::BOLD),
+                            bold,
                         ),
-                        Span::raw(format!("{}us", run_time_micros)),
+                        Span::raw(format!("{:3}us", run_time_micros)),
+                        Span::styled(
+                            " | Draw time: ",
+                            bold,
+                        ),
+                        Span::raw(format!("{:5}us", draw_time_micros)),
+                        Span::styled(
+                            " | Spare time: ",
+                            bold,
+                        ),
+                        if spare_time_millis <= 0 {
+                            Span::styled(format!("{:3}ms", spare_time_millis), Style::default().fg(Color::Red).add_modifier(Modifier::BOLD))
+                        } else {
+                            Span::raw(format!("{:3}ms", spare_time_millis))
+                        },
                     ])];
 
                     Paragraph::new(text)
@@ -308,44 +366,72 @@ impl App {
                         .alignment(Alignment::Left)
                 };
 
-                let delta_bar_0 = {
+                let novelty_bar = {
                     Gauge::default()
                         .block(
                             Block::default()
-                                .title(" Smoothed Deltas ")
-                                .borders(Borders::TOP | Borders::LEFT | Borders::RIGHT),
+                                .title(" Novelty ")
+                                .borders(Borders::ALL),
                         )
-                        .gauge_style(Style::default().fg(Color::White))
-                        .label("Bass")
-                        .ratio((deltas.0 / peak_delta).min(1.0))
+                        .gauge_style(Style::default().fg(Color::Yellow))
+                        .ratio((last_novelty / max_novelty).min(1.0))
                 };
 
-                let delta_bar_1 = {
-                    Gauge::default()
-                        .block(Block::default().borders(Borders::LEFT | Borders::RIGHT))
-                        .gauge_style(Style::default().fg(Color::White))
-                        .label("Mid")
-                        .ratio((deltas.1 / peak_delta).min(1.0))
+                let spotify_status_text = if let Some((playing, progress)) = current_track {
+                    let full_track = playing.item.as_ref().unwrap();
+                    let duration = full_track.duration_ms;
+                    vec![
+                        Spans::from(vec![
+                            Span::styled(" Status: ", bold),
+                            Span::styled("Online", Style::default().fg(Color::Green).add_modifier(Modifier::BOLD))
+                        ]),
+                        Spans::from(vec![
+                            Span::styled(" Current track: ", bold),
+                            Span::raw(format!("{} - {}", &full_track.name, &full_track.artists[0].name))
+                        ]),
+                        Spans::from(vec![
+                            Span::styled(" Current track ID: ", bold),
+                            Span::raw(full_track.id.as_ref().map(|s| s.as_str()).unwrap_or("Unknown ID"))
+                        ]),
+                        Spans::from(vec![
+                            Span::styled(" Time: ", bold),
+                            Span::raw(format!("{}:{:02} / {}:{:02}", progress / 60_000, progress / 1000 % 60, duration / 60000, duration / 1000 % 60)),
+                        ]),
+                        Spans::from(vec![
+                            Span::styled(" Tempo: ", bold),
+                            Span::raw(format!("{:.2}", tempo)),
+                        ]),
+                        Spans::from(vec![
+                            Span::styled(" New Beat: ", bold),
+                            if is_beat {
+                                Span::styled("TRUE ", Style::default().fg(Color::White).bg(Color::Green).add_modifier(Modifier::BOLD))
+                            } else {
+                                Span::styled("False", Style::default().fg(Color::Red))
+                            },
+                        ]),
+                    ]
+                } else {
+                    vec![
+                        Spans::from(vec![
+                            Span::styled(" Status: ", bold),
+                            Span::raw("disconnected"),
+                        ])
+                    ]
                 };
 
-                let delta_bar_2 = {
-                    Gauge::default()
-                        .block(
-                            Block::default()
-                                .borders(Borders::LEFT | Borders::RIGHT | Borders::BOTTOM),
-                        )
-                        .gauge_style(Style::default().fg(Color::White))
-                        .label("Treble")
-                        .ratio((deltas.2 / peak_delta).min(1.0))
-                };
+                let spotify_status_widget = Paragraph::new(spotify_status_text)
+                    .block(Block::default().title(" Spotify ").borders(Borders::ALL));
 
                 frame.render_widget(raw_graph, graph_layout[0]);
                 frame.render_widget(fft_graph, graph_layout[1]);
+                frame.render_widget(novelty_graph, graph_layout[2]);
                 frame.render_widget(status, output_data_layout[0]);
-                frame.render_widget(delta_bar_0, output_data_layout[1]);
-                frame.render_widget(delta_bar_1, output_data_layout[2]);
-                frame.render_widget(delta_bar_2, output_data_layout[3]);
+                frame.render_widget(novelty_bar, output_data_layout[1]);
+                frame.render_widget(spotify_status_widget, output_data_layout[2]);
             })
             .unwrap();
+
+        self.draw_time = Instant::now().duration_since(start);
+        self.last_run_end = Instant::now();
     }
 }

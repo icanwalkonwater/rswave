@@ -1,11 +1,12 @@
 use rpi_led_remote::app::App;
 use std::{
     thread::sleep,
-    time::{Duration, Instant},
+    time::{Duration},
 };
 
-fn main() -> anyhow::Result<()> {
-    let app = App::new()?;
+#[tokio::main]
+async fn main() -> anyhow::Result<()> {
+    let app = App::new().await?;
     let mut app = app.lock();
 
     app.init_network()?;
@@ -14,10 +15,10 @@ fn main() -> anyhow::Result<()> {
 
     loop {
         if app.can_run() {
-            app.run_once()?;
+            app.run_once().await?;
             app.draw();
+        } else {
+            sleep(Duration::from_millis(10));
         }
-
-        sleep(Duration::from_millis(50));
     }
 }
