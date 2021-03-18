@@ -1,5 +1,5 @@
 [package]
-name = "rpi_led_common"
+name = "rswave_common"
 version = "0.1.0"
 authors = ["Lucas Malandrino <lucas.malandrino@gmail.com>"]
 edition = "2018"

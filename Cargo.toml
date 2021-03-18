@@ -1,6 +1,6 @@
 [workspace]
 members = [
-    "rpi_led_local",
-    "rpi_led_remote",
-    "rpi_led_common",
+    "rswave_server",
+    "rswave_remote",
+    "rswave_common",
 ]

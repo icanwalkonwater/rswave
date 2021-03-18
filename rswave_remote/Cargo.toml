@@ -1,11 +1,11 @@
 [package]
-name = "rpi_led_remote"
+name = "rswave_remote"
 version = "0.1.0"
 authors = ["Lucas Malandrino <lucas.malandrino@gmail.com>"]
 edition = "2018"
 
 [dependencies]
-rpi_led_common = { path = "../rpi_led_common" }
+rswave_common = { path = "../rswave_common" }
 byteorder = "^1.4.2"
 
 structopt = "^0.3.21"

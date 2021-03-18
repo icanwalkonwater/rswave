@@ -1,6 +1,6 @@
 use crate::{audio::AudioProcessor, spotify::SpotifyTracker};
 use anyhow::{anyhow, Result};
-use rpi_led_common::{
+use rswave_common::{
     packets::{
         AckPacket, ArchivedAckPacket, DataMode, GoodbyePacket, HelloPacket, NoveltyBeatsModeData,
         NoveltyBeatsModePacket, NoveltyModeData, NoveltyModePacket, SetModePacket,

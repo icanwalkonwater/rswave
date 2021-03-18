@@ -1,4 +1,4 @@
-use rpi_led_remote::app::App;
+use rswave_remote::app::App;
 use std::{thread::sleep, time::Duration};
 
 #[tokio::main]
