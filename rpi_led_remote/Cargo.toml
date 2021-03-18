@@ -15,7 +15,7 @@ anyhow = "^1.0.38"
 parking_lot = "^0.11.1"
 tokio = { version = "^0.2", features = ["parking_lot", "rt-core", "macros"] }
 
-cpal = "^0.13.1"
+cpal = "^0.13.2"
 ringbuf = "^0.2.3"
 realfft = "^1.1.0"
 rspotify = "^0.10.0"

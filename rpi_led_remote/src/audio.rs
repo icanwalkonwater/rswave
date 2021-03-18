@@ -1,6 +1,5 @@
 use realfft::{num_complex::Complex, RealFftPlanner, RealToComplex};
-use std::{f64::consts::PI, sync::Arc};
-use std::collections::VecDeque;
+use std::{cmp::Ordering, collections::VecDeque, f64::consts::PI, sync::Arc};
 
 pub const DEFAULT_SAMPLE_SIZE: usize = 2048;
 pub const DEFAULT_DELTA_HISTORY_SIZE: usize = 200;
@@ -112,12 +111,20 @@ impl AudioProcessor {
         &self.output[1..]
     }
 
-    pub fn novelty_curve(&self) -> impl Iterator<Item=f64> + '_ {
+    pub fn novelty_curve(&self) -> impl Iterator<Item = f64> + '_ {
         self.novelty_curve.iter().copied()
     }
 
     pub fn novelty(&self) -> f64 {
         *self.novelty_curve.back().unwrap_or(&0.0)
+    }
+
+    pub fn novelty_peak(&self) -> f64 {
+        self.novelty_curve
+            .iter()
+            .copied()
+            .max_by(|a, b| a.partial_cmp(b).unwrap_or(Ordering::Equal))
+            .unwrap_or(0.0)
     }
 }
 

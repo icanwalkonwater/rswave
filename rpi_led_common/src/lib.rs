@@ -1,4 +1,6 @@
 pub use int_enum::IntEnum;
+pub use rkyv;
+
 pub const MAGIC: u8 = 0x42;
 
 pub mod packets;
