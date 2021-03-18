@@ -31,6 +31,7 @@ pub struct SetModePacket {
 pub enum NoveltyModePacket {
     Data(NoveltyModeData),
     Abort,
+    Goodbye(GoodbyeData),
 }
 
 #[derive(Debug, Clone, Archive, Serialize, Deserialize)]
@@ -43,6 +44,7 @@ pub struct NoveltyModeData {
 pub enum NoveltyBeatsModePacket {
     Data(NoveltyBeatsModeData),
     Abort,
+    Goodbye(GoodbyeData),
 }
 
 #[derive(Debug, Clone, Archive, Serialize, Deserialize)]
@@ -52,7 +54,7 @@ pub struct NoveltyBeatsModeData {
 }
 
 #[derive(Debug, Clone, Archive, Serialize, Deserialize)]
-pub struct GoodbyePacket {
+pub struct GoodbyeData {
     pub magic: u8,
     pub force: bool,
 }

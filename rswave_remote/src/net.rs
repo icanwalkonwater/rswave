@@ -2,7 +2,7 @@ use crate::{audio::AudioProcessor, spotify::SpotifyTracker};
 use anyhow::{anyhow, Result};
 use rswave_common::{
     packets::{
-        AckPacket, ArchivedAckPacket, DataMode, GoodbyePacket, HelloPacket, NoveltyBeatsModeData,
+        AckPacket, ArchivedAckPacket, DataMode, HelloPacket, NoveltyBeatsModeData,
         NoveltyBeatsModePacket, NoveltyModeData, NoveltyModePacket, SetModePacket,
     },
     rkyv::{
@@ -13,6 +13,7 @@ use rswave_common::{
     MAGIC,
 };
 use std::net::UdpSocket;
+use rswave_common::packets::GoodbyeData;
 
 pub struct NetHandler {
     socket: UdpSocket,
@@ -49,13 +50,15 @@ impl NetHandler {
         serializer.serialize_value(item)?;
 
         let buff = serializer.into_inner();
+        println!("Sending {} bytes", buff.len());
+        println!("{:?}", buff);
         self.socket.send(&buff)?;
 
         self.serialize_scratch.replace(buff);
         Ok(())
     }
 
-    pub fn handshake(&mut self) -> Result<()> {
+    pub fn handshake(&mut self, mode: DataMode) -> Result<()> {
         let hello = HelloPacket::default();
 
         self.serialize_send(&hello)?;
@@ -65,18 +68,12 @@ impl NetHandler {
             .expect("Failed to receive");
         let remote_hello = unsafe { archived_value::<HelloPacket>(&self.deserialize_scratch, 0) };
 
-        if hello.magic == remote_hello.magic && hello.random == remote_hello.random {
-            Ok(())
-        } else {
-            Err(anyhow!("Handshake failed !"))
+        if hello.magic != remote_hello.magic || hello.random != remote_hello.random {
+            return Err(anyhow!("Handshake failed !"));
         }
-    }
 
-    pub fn send_mode(&mut self, mode: DataMode) -> Result<()> {
-        self.mode = mode;
-
-        let packet = SetModePacket { mode };
-        self.serialize_send(&packet)?;
+        let mode = SetModePacket { mode };
+        self.serialize_send(&mode)?;
         Ok(())
     }
 
@@ -123,11 +120,22 @@ impl NetHandler {
     }
 
     pub fn stop(&mut self, force: bool) -> Result<()> {
-        let packet = GoodbyePacket {
-            magic: MAGIC,
-            force,
-        };
-        self.serialize_send(&packet)?;
+        match self.mode {
+            DataMode::Novelty => {
+                let packet = NoveltyModePacket::Goodbye(GoodbyeData {
+                    magic: MAGIC,
+                    force,
+                });
+                self.serialize_send(&packet)?;
+            },
+            DataMode::NoveltyBeats => {
+                let packet = NoveltyBeatsModePacket::Goodbye(GoodbyeData {
+                    magic: MAGIC,
+                    force,
+                });
+                self.serialize_send(&packet)?;
+            },
+        }
 
         self.socket.recv(&mut self.deserialize_scratch)?;
         let archived = unsafe { archived_value::<AckPacket>(&self.deserialize_scratch, 0) };
@@ -143,7 +151,7 @@ impl NetHandler {
 impl Drop for NetHandler {
     fn drop(&mut self) {
         if !self.stopped {
-            self.stop(true).expect("Failed to close connection");
+            eprintln!("Forgot to stop NetHandler !");
         }
     }
 }

@@ -1,82 +1,60 @@
-use cichlid::ColorRGB;
-use rs_ws281x::{ChannelBuilder, Controller, RawColor, StripType};
+use std::str::FromStr;
+use structopt::StructOpt;
+use anyhow::anyhow;
 
 pub mod runners;
+pub mod app;
+pub mod led_controllers;
+pub mod net;
 
-// Default: 800kHz
-pub const LED_FREQ: u32 = 800_000;
-// DO NOT USE 5 on RPi
-pub const LED_DMA: i32 = 10;
-pub const LED_COUNT: i32 = 5;
-// GPIO18
-pub const LED_PIN: i32 = 18;
-// Don't change
-pub const LED_CHANNEL: usize = 0;
+#[derive(Copy, Clone, Debug, StructOpt)]
+pub struct Opt {
+    /// Port to use.
+    #[structopt(short, long, default_value = "20200")]
+    pub port: u16,
 
-pub const COLOR_OFF: RawColor = [0, 0, 0, 0];
+    /// Set overall brightness.
+    #[structopt(short, long, default_value = "255")]
+    pub brightness: u8,
 
-pub trait ControllerExt {
-    fn commit(&mut self) -> rs_ws281x::Result<()>;
+    /// Reset the LED strip and exit.
+    #[structopt(short, long)]
+    pub reset: bool,
 
-    fn set_all(&mut self, color: ColorRGB) -> rs_ws281x::Result<()>;
+    /// Led strip type, will default to WS2811.
+    #[structopt(short, long, default_value = "ws2811")]
+    pub led_type: LedStripType,
 
-    fn set_all_individual(&mut self, colors: &[ColorRGB]) -> rs_ws281x::Result<()>;
+    /// Amount of LEDs on the strip.
+    #[structopt(short = "c", long)]
+    pub led_count: usize,
 
-    fn set_all_raw(&mut self, color: RawColor) -> rs_ws281x::Result<()>;
+    /// Delay during LED updates in milliseconds.
+    #[structopt(long, default_value = "50")]
+    pub led_update_period: u64,
 
-    fn set_all_individual_raw(&mut self, colors: &[RawColor]) -> rs_ws281x::Result<()>;
+    /// Controls the speed of the rainbow during the standby mode.
+    #[structopt(long, default_value = "1.0")]
+    pub standby_speed: f32,
+
+    /// Reverse the rainbow effect of the standby runner.
+    /// This effect will only be visible on addressable LED strips.
+    #[structopt(long)]
+    pub standby_reverse: bool,
 }
 
-impl ControllerExt for Controller {
-    fn commit(&mut self) -> rs_ws281x::Result<()> {
-        self.render()?;
-        self.wait()
-    }
-
-    fn set_all(&mut self, color: ColorRGB) -> rs_ws281x::Result<()> {
-        for led in self.leds_mut(LED_CHANNEL) {
-            *led = [color.r, color.g, color.b, 0];
-        }
-        self.commit()
-    }
-
-    fn set_all_individual(&mut self, colors: &[ColorRGB]) -> rs_ws281x::Result<()> {
-        assert!(colors.len() >= self.leds(LED_CHANNEL).len());
-        for (i, led) in self.leds_mut(LED_CHANNEL).iter_mut().enumerate() {
-            *led = [colors[i].r, colors[i].g, colors[i].b, 0];
-        }
-        self.commit()
-    }
-
-    fn set_all_raw(&mut self, color: RawColor) -> rs_ws281x::Result<()> {
-        for led in self.leds_mut(LED_CHANNEL) {
-            *led = color;
-        }
-        self.commit()
-    }
-
-    fn set_all_individual_raw(&mut self, colors: &[RawColor]) -> rs_ws281x::Result<()> {
-        assert!(colors.len() >= self.leds(LED_CHANNEL).len());
-        for (i, led) in self.leds_mut(LED_CHANNEL).iter_mut().enumerate() {
-            *led = colors[i];
-        }
-        self.commit()
-    }
+#[derive(Copy, Clone, Debug)]
+pub enum LedStripType {
+    Ws2811,
 }
 
-pub fn create_led_controller() -> rs_ws281x::Result<Controller> {
-    rs_ws281x::ControllerBuilder::new()
-        .freq(LED_FREQ)
-        .dma(LED_DMA)
-        .channel(
-            LED_CHANNEL,
-            ChannelBuilder::new()
-                .pin(LED_PIN)
-                .count(LED_COUNT)
-                .strip_type(StripType::Ws2811Gbr)
-                .invert(false)
-                .brightness(100)
-                .build(),
-        )
-        .build()
+impl FromStr for LedStripType {
+    type Err = anyhow::Error;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s.to_lowercase().as_str() {
+            "ws2811" => Ok(Self::Ws2811),
+            _ => Err(anyhow!("Unknown led strip type !")),
+        }
+    }
 }

@@ -27,6 +27,7 @@ use tui::{
     widgets::{Axis, Block, Borders, Chart, Dataset, Gauge, GraphType, Paragraph},
     Terminal,
 };
+use rswave_common::packets::DataMode;
 
 pub(crate) struct AudioHolder {
     device: cpal::Device,
@@ -88,7 +89,7 @@ impl App {
         // Init net
         let net = if let Some(addr) = opt.address.as_ref() {
             let mut net = NetHandler::new(addr)?;
-            net.handshake()?;
+            net.handshake(if spotify.is_some() { DataMode::NoveltyBeats } else { DataMode::Novelty })?;
             Some(net)
         } else {
             None
@@ -219,11 +220,13 @@ impl App {
 
         // Send to remote and acknowledge
         if let Some(net) = self.net.as_mut() {
+            println!("Start send data");
             net.send_current_data(
                 &self.audio.processor,
                 self.spotify.as_ref(),
                 self.opt.no_ack,
             )?;
+            println!("Done send data");
         }
 
         // Time

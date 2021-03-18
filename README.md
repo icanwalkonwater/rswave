@@ -1,50 +1,27 @@
-# RPi Audio Led Visualizer (Very WIP)
+# RSwave
 
-Toy project to remotely control LED strips (WS281x) mounted on a RPi from another device using TCP sockets.
+Toy project to drive a LED strip using a realtime analysis of some audio combined with Spotify data.
 
-The visuals are driven by an audio input of the controlling device.
+## Architecture
+* `rswave_server` contains the code that will control the LEDs, it is made to run on a raspberry and will listen for UDP datagrams to gather data and build patterns from it.
+* `rswave_remote` contains the code that will perform the audio analysis and data fetching and send it via UDP datagrams to the RPi.
+* `rswave_common` contains the code shared among the 2 other packages, mainly the structs serialisation/deserialization.
 
-## Building
-### Local crate
-> Run with `--help` to see every available option.
+## Cross compilation
+Building `rswave_server` on the RPi can take a long time, fortunately cross compilation is an option.
 
-The crate `rpi_led_local` is an executable to compile for the target `arm-unknown-linux-gnueabihf` and is to be ran on the Raspberry.
-
-It is capable of controlling the LED bars and receives its instructions from a TCP socket using different protocols (`LedMode`) to control various parameters.
-
-Refer to [this repo](https://github.com/rpi-ws281x/rpi-ws281x-rust) for cross-compilation stuff.
-
-### Remote crate
-> Run with `--help` to see every available option.
-
-The crate `rpi_led_local` is to compile for whatever target you want. It is also an executable that will try to connect to the other app and will flood it with data.
-
-Most of the heavy computations are happening on this side.
-
-## Example setup
-### RPi side
-Start a server that will allow reconnections (`--multiple`) and with maximum brightness (255).
-
-Depending on your configuration you might need to run it as root (to access GPIO pins).
-```bash
-cargo build
-sudo target/debug/rpi_led_local --multiple --brightness 255
+You'll need the packages `clang-dev` and `gcc-arm-linux-gnueabihf`. You also need to configure cargo by putting this in `~/.cargo/config`:
+```toml
+[target.armv7-unknown-linux-gnueabihf]
+linker = "arm-linux-gnueabihf-gcc"
 ```
 
-### Remote side
-Start a client in intensity only mode (the led will be red but the amount of led on will depend on the volume of the audio source).
-I have an audio input device named "Wave" that replays what is coming out of my computer so I will supply it as an hint to choose this input source.
-
-Change `192.168.1.49` by the IP address of your raspberry.
-
-This one can run in userspace without problem.
+Next install the target through rustup:
 ```bash
-cargo build
-target/debug/rpi_led_remote --only-intensity --device-pattern Wave 192.168.1.49:20200
+rustup target add armv7-unknown-linux-gnueabihf
 ```
 
-## FAQ
-
-> Some LEDs are still on after the end of the program.
-
-Yes, turn them off using the `--reset` option.
+Now you can compile the package and copy paste it to your RPi.
+```bash
+cargo build -p rswave_server --release --target armv7-unknown-linux-gnueabihf
+```
