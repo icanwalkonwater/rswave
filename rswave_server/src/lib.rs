@@ -1,11 +1,11 @@
+use anyhow::anyhow;
 use std::str::FromStr;
 use structopt::StructOpt;
-use anyhow::anyhow;
 
-pub mod runners;
 pub mod app;
 pub mod led_controllers;
 pub mod net;
+pub mod runners;
 
 #[derive(Copy, Clone, Debug, StructOpt)]
 pub struct Opt {

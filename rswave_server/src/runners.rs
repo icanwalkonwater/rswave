@@ -1,10 +1,9 @@
 use crate::led_controllers::LedController;
-use cichlid::{ColorRGB, HSV};
-use std::time::Instant;
-use cichlid::prelude::RainbowFillSingleCycle;
 use anyhow::Result;
+use cichlid::{prelude::RainbowFillSingleCycle, ColorRGB, HSV};
 use enum_dispatch::enum_dispatch;
 use log::debug;
+use std::time::Instant;
 
 #[enum_dispatch]
 pub enum RunnerEnum {
@@ -83,9 +82,14 @@ impl Runner for StandbyRunner {
         if C::is_addressable_individually() {
             let mut rainbow = vec![ColorRGB::default(); controller.led_amount()];
             if self.reverse {
-                rainbow.iter_mut().rev().rainbow_fill_single_cycle(self.current_color.h);
+                rainbow
+                    .iter_mut()
+                    .rev()
+                    .rainbow_fill_single_cycle(self.current_color.h);
             } else {
-                rainbow.iter_mut().rainbow_fill_single_cycle(self.current_color.h);
+                rainbow
+                    .iter_mut()
+                    .rainbow_fill_single_cycle(self.current_color.h);
             }
             controller.set_all_individual(&rainbow);
         } else {

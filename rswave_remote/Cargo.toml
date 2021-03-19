@@ -3,6 +3,7 @@ name = "rswave_remote"
 version = "0.1.0"
 authors = ["Lucas Malandrino <lucas.malandrino@gmail.com>"]
 edition = "2018"
+default-run = "rswave_remote"
 
 [dependencies]
 rswave_common = { path = "../rswave_common" }

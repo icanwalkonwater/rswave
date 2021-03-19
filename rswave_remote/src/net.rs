@@ -2,7 +2,7 @@ use crate::{audio::AudioProcessor, spotify::SpotifyTracker};
 use anyhow::{anyhow, Result};
 use rswave_common::{
     packets::{
-        AckPacket, ArchivedAckPacket, DataMode, HelloPacket, NoveltyBeatsModeData,
+        AckPacket, ArchivedAckPacket, DataMode, GoodbyeData, HelloPacket, NoveltyBeatsModeData,
         NoveltyBeatsModePacket, NoveltyModeData, NoveltyModePacket, SetModePacket,
     },
     rkyv::{
@@ -13,7 +13,6 @@ use rswave_common::{
     MAGIC,
 };
 use std::net::UdpSocket;
-use rswave_common::packets::GoodbyeData;
 
 pub struct NetHandler {
     socket: UdpSocket,
@@ -40,13 +39,14 @@ impl NetHandler {
     }
 
     fn serialize_send(&mut self, item: &impl Serialize<WriteSerializer<Vec<u8>>>) -> Result<()> {
-        if let Some(scratch) = &mut self.serialize_scratch {
+        // TODO: re-enable reusing of the scratch buffer
+        /*if let Some(scratch) = &mut self.serialize_scratch {
             scratch.clear();
         } else {
             self.serialize_scratch = Some(Vec::new());
-        }
+        }*/
 
-        let mut serializer = WriteSerializer::new(self.serialize_scratch.take().unwrap());
+        let mut serializer = WriteSerializer::new(Vec::new());
         serializer.serialize_value(item)?;
 
         let buff = serializer.into_inner();
@@ -54,7 +54,7 @@ impl NetHandler {
         println!("{:?}", buff);
         self.socket.send(&buff)?;
 
-        self.serialize_scratch.replace(buff);
+        // self.serialize_scratch.replace(buff);
         Ok(())
     }
 
@@ -72,7 +72,9 @@ impl NetHandler {
             return Err(anyhow!("Handshake failed !"));
         }
 
+        self.mode = mode;
         let mode = SetModePacket { mode };
+        println!("Send mode: {:?}", mode);
         self.serialize_send(&mode)?;
         Ok(())
     }
@@ -127,14 +129,14 @@ impl NetHandler {
                     force,
                 });
                 self.serialize_send(&packet)?;
-            },
+            }
             DataMode::NoveltyBeats => {
                 let packet = NoveltyBeatsModePacket::Goodbye(GoodbyeData {
                     magic: MAGIC,
                     force,
                 });
                 self.serialize_send(&packet)?;
-            },
+            }
         }
 
         self.socket.recv(&mut self.deserialize_scratch)?;

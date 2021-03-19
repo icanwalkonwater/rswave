@@ -1,12 +1,16 @@
-use crate::led_controllers::LedController;
-use crate::net::{NetHandler, RemoteData};
-use crate::runners::{RunnerEnum, Runner, StandbyRunner, SimpleBeatRunner, NoopRunner};
-use crate::Opt;
+use crate::{
+    led_controllers::LedController,
+    net::{NetHandler, RemoteData},
+    runners::{NoopRunner, Runner, RunnerEnum, SimpleBeatRunner, StandbyRunner},
+    Opt,
+};
 use anyhow::Result;
+use log::{debug, info};
 use single_value_channel::Updater;
-use std::thread::{JoinHandle};
-use std::time::{Duration, Instant};
-use log::{info, debug};
+use std::{
+    thread::JoinHandle,
+    time::{Duration, Instant},
+};
 
 pub(crate) enum ControllerMessage {
     Standby,
@@ -40,7 +44,10 @@ impl<C: LedController + Send + 'static> App<C> {
         })
     }
 
-    fn make_controller_thread(opt: Opt, mut controller: C) -> (JoinHandle<()>, Updater<ControllerMessage>) {
+    fn make_controller_thread(
+        opt: Opt,
+        mut controller: C,
+    ) -> (JoinHandle<()>, Updater<ControllerMessage>) {
         let (mut receiver, updater) =
             single_value_channel::channel_starting_with(ControllerMessage::Noop);
 
@@ -54,7 +61,8 @@ impl<C: LedController + Send + 'static> App<C> {
                     let start = Instant::now();
                     match receiver.latest_mut() {
                         msg @ ControllerMessage::Standby => {
-                            runner = StandbyRunner::new(opt.standby_speed, opt.standby_reverse).into();
+                            runner =
+                                StandbyRunner::new(opt.standby_speed, opt.standby_reverse).into();
                             *msg = ControllerMessage::Noop;
                             info!("Runner: standby");
                         }
@@ -99,7 +107,8 @@ impl<C: LedController + Send + 'static> App<C> {
             debug!("Waiting for packet...");
             match self.net.recv()? {
                 RemoteData::Analysis { novelty, is_beat } => {
-                    self.messenger.update(ControllerMessage::Analysis { novelty, is_beat })?;
+                    self.messenger
+                        .update(ControllerMessage::Analysis { novelty, is_beat })?;
                 }
                 RemoteData::Goodbye { .. } => {
                     // Ignore force flag
@@ -115,7 +124,9 @@ impl<C: LedController + Send + 'static> App<C> {
 
     pub fn stop(self) -> Result<()> {
         self.messenger.update(ControllerMessage::Exit)?;
-        self.runner_thread.join().expect("Failed to join runner thread !");
+        self.runner_thread
+            .join()
+            .expect("Failed to join runner thread !");
         Ok(())
     }
 }

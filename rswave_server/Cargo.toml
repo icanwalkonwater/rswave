@@ -3,6 +3,7 @@ name = "rswave_server"
 version = "0.1.0"
 authors = ["Lucas Malandrino <lucas.malandrino@gmail.com>"]
 edition = "2018"
+default-run = "rswave_server"
 
 [features]
 default = ["controller_ws2811"]

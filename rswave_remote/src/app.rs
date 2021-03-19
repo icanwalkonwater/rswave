@@ -11,6 +11,7 @@ use cpal::{
 };
 use parking_lot::Mutex;
 use ringbuf::{Consumer, RingBuffer};
+use rswave_common::packets::DataMode;
 use std::{
     cmp::Ordering,
     io::{stdout, Stdout},
@@ -27,7 +28,6 @@ use tui::{
     widgets::{Axis, Block, Borders, Chart, Dataset, Gauge, GraphType, Paragraph},
     Terminal,
 };
-use rswave_common::packets::DataMode;
 
 pub(crate) struct AudioHolder {
     device: cpal::Device,
@@ -89,7 +89,11 @@ impl App {
         // Init net
         let net = if let Some(addr) = opt.address.as_ref() {
             let mut net = NetHandler::new(addr)?;
-            net.handshake(if spotify.is_some() { DataMode::NoveltyBeats } else { DataMode::Novelty })?;
+            net.handshake(if spotify.is_some() {
+                DataMode::NoveltyBeats
+            } else {
+                DataMode::Novelty
+            })?;
             Some(net)
         } else {
             None

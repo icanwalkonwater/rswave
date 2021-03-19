@@ -1,7 +1,7 @@
+use anyhow::Result;
 use cichlid::ColorRGB;
 #[cfg(feature = "controller_ws2811")]
-use rs_ws281x::{ControllerBuilder, ChannelBuilder, StripType, RawColor};
-use anyhow::Result;
+use rs_ws281x::{ChannelBuilder, ControllerBuilder, RawColor, StripType};
 
 pub trait LedController {
     fn is_addressable_individually() -> bool;
@@ -47,7 +47,7 @@ impl ControllerWs2811 {
                     .strip_type(StripType::Ws2811Gbr)
                     .invert(false)
                     .brightness(brightness)
-                    .build()
+                    .build(),
             )
             .build()?;
 
@@ -73,7 +73,12 @@ impl LedController for ControllerWs2811 {
     }
 
     fn set_all_individual(&mut self, colors: &[ColorRGB]) {
-        for (i, led) in self.inner.leds_mut(Self::LED_CHANNEL).iter_mut().enumerate() {
+        for (i, led) in self
+            .inner
+            .leds_mut(Self::LED_CHANNEL)
+            .iter_mut()
+            .enumerate()
+        {
             *led = [colors[i].r, colors[i].g, colors[i].b, 0];
         }
     }

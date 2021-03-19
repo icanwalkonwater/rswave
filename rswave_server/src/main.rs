@@ -1,9 +1,10 @@
-use rswave_server::Opt;
-use rswave_server::app::App;
-use rswave_server::led_controllers::{ControllerWs2811, LedController};
+use log::{debug, info};
+use rswave_server::{
+    app::App,
+    led_controllers::{ControllerWs2811, LedController},
+    LedStripType, Opt,
+};
 use structopt::StructOpt;
-use rswave_server::LedStripType;
-use log::{info, debug};
 
 fn main() -> anyhow::Result<()> {
     env_logger::init();
