@@ -30,7 +30,7 @@ pub struct Opt {
     pub led_count: usize,
 
     /// Delay during LED updates in milliseconds.
-    #[structopt(long, default_value = "50")]
+    #[structopt(long, default_value = "10")]
     pub led_update_period: u64,
 
     /// Controls the speed of the rainbow during the standby mode.

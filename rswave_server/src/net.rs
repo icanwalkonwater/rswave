@@ -1,5 +1,5 @@
 use anyhow::{anyhow, Result};
-use log::{debug, info};
+use log::{debug, info, error};
 use rswave_common::{
     packets::{
         AckPacket, DataMode, HelloPacket, NoveltyBeatsModePacket, NoveltyModePacket, SetModePacket,
@@ -17,6 +17,7 @@ use std::{
     net::{SocketAddr, UdpSocket},
     time::Duration,
 };
+use rswave_common::rkyv::Aligned;
 
 #[derive(Debug)]
 pub enum RemoteData {
@@ -29,7 +30,7 @@ pub struct NetHandler {
     current_peer: Option<SocketAddr>,
     mode: DataMode,
     serialize_scratch: Option<Vec<u8>>,
-    deserialize_scratch: [u8; 128],
+    deserialize_scratch: Aligned<[u8; 128]>,
     is_stopped: bool,
 }
 
@@ -43,7 +44,7 @@ impl NetHandler {
             current_peer: None,
             mode: DataMode::Novelty,
             serialize_scratch: None,
-            deserialize_scratch: [0; 128],
+            deserialize_scratch: Aligned([0; 128]),
             is_stopped: false,
         })
     }
@@ -60,7 +61,7 @@ impl NetHandler {
 
         self.socket.set_nonblocking(true)?;
         let res = loop {
-            match self.socket.recv_from(&mut self.deserialize_scratch) {
+            match self.socket.recv_from(self.deserialize_scratch.as_mut()) {
                 Ok((_, peer)) => {
                     self.current_peer = Some(peer);
                     self.socket.connect(peer)?;
@@ -86,13 +87,13 @@ impl NetHandler {
         debug!("Starting handshake...");
 
         // Hello
-        let hello = unsafe { archived_value::<HelloPacket>(&self.deserialize_scratch, 0) };
+        let hello = unsafe { archived_value::<HelloPacket>(self.deserialize_scratch.as_ref(), 0) };
         let hello = hello.deserialize(&mut AllocDeserializer).unwrap();
         self.serialize_send(&hello)?;
 
         // SetMode
-        self.socket.recv(&mut self.deserialize_scratch)?;
-        let mode = unsafe { archived_value::<SetModePacket>(&self.deserialize_scratch, 0) };
+        self.socket.recv(self.deserialize_scratch.as_mut())?;
+        let mode = unsafe { archived_value::<SetModePacket>(self.deserialize_scratch.as_ref(), 0) };
         let mode: SetModePacket = mode.deserialize(&mut AllocDeserializer).unwrap();
         debug!("Mode: {:?}", mode);
         self.mode = mode.mode;
@@ -103,34 +104,31 @@ impl NetHandler {
     }
 
     fn serialize_send(&mut self, item: &impl Serialize<WriteSerializer<Vec<u8>>>) -> Result<()> {
-        // TODO: re-enable reusing of the scratch buffer
-        /*if let Some(scratch) = &mut self.serialize_scratch {
+        if let Some(scratch) = &mut self.serialize_scratch {
             scratch.clear();
         } else {
             self.serialize_scratch = Some(Vec::new());
-        }*/
+        }
 
-        let mut serializer = WriteSerializer::new(Vec::new());
+        let mut serializer = WriteSerializer::new(self.serialize_scratch.take().unwrap());
         serializer.serialize_value(item)?;
 
         let buff = serializer.into_inner();
         self.socket.send(&buff)?;
 
-        // self.serialize_scratch.replace(buff);
+        self.serialize_scratch.replace(buff);
         Ok(())
     }
 
     pub fn recv(&mut self) -> Result<RemoteData> {
-        let len = self.socket.recv(&mut self.deserialize_scratch)?;
-        debug!("Received {} bytes", len);
-        debug!("{:?}", &self.deserialize_scratch[..len]);
+        let len = self.socket.recv(self.deserialize_scratch.as_mut())?;
 
         let res = match self.mode {
             DataMode::Novelty => {
                 let packet =
-                    check_archive::<NoveltyModePacket>(&self.deserialize_scratch[..len], 0)
-                        .map_err(|_| anyhow!("Check archive failed"))?;
-                let packet: NoveltyModePacket = packet.deserialize(&mut AllocDeserializer).unwrap();
+                    check_archive::<NoveltyModePacket>(&self.deserialize_scratch.as_ref()[..len], 0)
+                        .map_err(|err| anyhow!("Check archive failed: {}", err))?;
+                let packet: NoveltyModePacket = packet.deserialize(&mut AllocDeserializer)?;
 
                 match packet {
                     NoveltyModePacket::Data(data) => Ok(RemoteData::Analysis {
@@ -148,15 +146,10 @@ impl NetHandler {
             DataMode::NoveltyBeats => {
                 // TODO: don't deserialize, use the archive
 
-                debug!("Reading as archive");
                 let packet =
-                    check_archive::<NoveltyBeatsModePacket>(&self.deserialize_scratch[..len], 0)
-                        .map_err(|_| anyhow!("Check archive failed"))?;
-                debug!("Deserializing");
-                let packet: NoveltyBeatsModePacket =
-                    packet.deserialize(&mut AllocDeserializer).unwrap();
-
-                debug!("Novelty beat packet {:?}", packet);
+                    check_archive::<NoveltyBeatsModePacket>(&self.deserialize_scratch.as_ref()[..len], 0)
+                        .map_err(|err| anyhow!("Check archive failed: {}", err))?;
+                let packet: NoveltyBeatsModePacket = packet.deserialize(&mut AllocDeserializer)?;
 
                 match packet {
                     NoveltyBeatsModePacket::Data(data) => Ok(RemoteData::Analysis {
@@ -174,11 +167,10 @@ impl NetHandler {
         };
 
         if res.is_ok() {
-            debug!("Send ACK OK");
             let packet = AckPacket::Ok;
             self.serialize_send(&packet)?;
         } else {
-            debug!("Send ACK Abort");
+            error!("Send ACK Abort");
             let packet = AckPacket::Abort;
             self.serialize_send(&packet)?;
             self.current_peer = None;

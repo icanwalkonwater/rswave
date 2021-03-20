@@ -11,7 +11,9 @@ use std::{
     thread::JoinHandle,
     time::{Duration, Instant},
 };
+use crate::runners::IntenseRunner;
 
+#[derive(Debug, Copy, Clone)]
 pub(crate) enum ControllerMessage {
     Standby,
     RandomRunner,
@@ -67,12 +69,21 @@ impl<C: LedController + Send + 'static> App<C> {
                             info!("Runner: standby");
                         }
                         msg @ ControllerMessage::RandomRunner => {
-                            runner = SimpleBeatRunner::new().into();
+                            runner = IntenseRunner::new().into();
                             *msg = ControllerMessage::Noop;
-                            info!("Runner: simple beat");
+                            info!("Runner: common");
+                        }
+                        msg @ ControllerMessage::Analysis { .. } => {
+                            if let ControllerMessage::Analysis { novelty, is_beat } = msg {
+                                if *is_beat {
+                                    runner.beat();
+                                }
+                                runner.novelty(*novelty);
+                            }
+                            *msg = ControllerMessage::Noop;
                         }
                         ControllerMessage::Exit => break,
-                        _ => {}
+                        ControllerMessage::Noop => {}
                     }
 
                     if runner.run_once() {
@@ -104,7 +115,6 @@ impl<C: LedController + Send + 'static> App<C> {
 
         // Wait for next packet
         loop {
-            debug!("Waiting for packet...");
             match self.net.recv()? {
                 RemoteData::Analysis { novelty, is_beat } => {
                     self.messenger

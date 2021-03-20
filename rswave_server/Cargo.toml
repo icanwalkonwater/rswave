@@ -13,10 +13,11 @@ controller_ws2811 = ["rs_ws281x"]
 rswave_common = { path = "../rswave_common" }
 rs_ws281x = { version = "^0.4.2", optional = true }
 cichlid = "^0.2.1"
+rand = "^0.8.3"
 
 structopt = "^0.3.21"
 anyhow = "^1.0.38"
 log = "^0.4.14"
 env_logger = "^0.8.2"
-enum_dispatch = "0.3.5"
-single_value_channel = "1.2.2"
+enum_dispatch = "^0.3.5"
+single_value_channel = "^1.2.2"

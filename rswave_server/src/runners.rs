@@ -10,13 +10,28 @@ pub enum RunnerEnum {
     NoopRunner,
     StandbyRunner,
     SimpleBeatRunner,
+    IntenseRunner,
 }
 
 #[enum_dispatch(RunnerEnum)]
 pub trait Runner {
-    fn beat(&mut self);
+    fn beat(&mut self) {}
+    fn novelty(&mut self, _novelty: f64) {}
     fn run_once(&mut self) -> bool;
     fn display<C: LedController>(&self, controller: &mut C) -> Result<()>;
+}
+
+fn hue_randomizer(mut color: HSV) -> HSV {
+    let min = color.h.wrapping_sub(25);
+    let max = color.h.wrapping_add(25);
+    let range = if min < max { min..max } else { max..min };
+    color.h = loop {
+        let hue = rand::random::<u8>();
+        if !range.contains(&hue) {
+            break hue;
+        }
+    };
+    color
 }
 
 // Noop runner
@@ -24,10 +39,6 @@ pub trait Runner {
 pub struct NoopRunner;
 
 impl Runner for NoopRunner {
-    fn beat(&mut self) {
-        // no-op
-    }
-
     fn run_once(&mut self) -> bool {
         // no-op
         false
@@ -62,10 +73,6 @@ impl StandbyRunner {
 }
 
 impl Runner for StandbyRunner {
-    fn beat(&mut self) {
-        // no-op
-    }
-
     fn run_once(&mut self) -> bool {
         let now = Instant::now();
         let delta_time = now.duration_since(self.last_update).as_secs_f32();
@@ -121,8 +128,12 @@ impl SimpleBeatRunner {
 
 impl Runner for SimpleBeatRunner {
     fn beat(&mut self) {
-        self.current_color.h = self.current_color.h.wrapping_add(self.hue_increment);
-        self.current_color.maximize_brightness();
+        self.current_color.h = loop {
+            let new_hue = rand::random();
+            if (new_hue as i16 - self.current_color.h as i16).abs() > 50 {
+                break new_hue;
+            }
+        };
         self.need_update = true;
     }
 
@@ -140,4 +151,51 @@ impl Runner for SimpleBeatRunner {
         controller.commit()
     }
 }
+// </editor-fold>
+
+// Intense runner
 // <editor-fold>
+pub struct IntenseRunner {
+    current_color: HSV,
+    gravity: f32,
+    last_update: Instant,
+}
+
+impl IntenseRunner {
+    pub fn new() -> Self {
+        Self {
+            current_color: HSV::new(0, 255, 255),
+            gravity: 150.0,
+            last_update: Instant::now(),
+        }
+    }
+}
+
+impl Runner for IntenseRunner {
+    fn beat(&mut self) {
+        self.current_color.maximize_brightness();
+    }
+
+    fn novelty(&mut self, novelty: f64) {
+        if novelty > 0.3 {
+            self.current_color = hue_randomizer(self.current_color);
+        }
+    }
+
+    fn run_once(&mut self) -> bool {
+        let now = Instant::now();
+        let delta_time = now.duration_since(self.last_update).as_secs_f32();
+        let brightness = (self.current_color.v as f32 / 2.55 - self.gravity * delta_time).max(0.0);
+        self.current_color.v = ((brightness * 2.55) as u8).max(20);
+
+        self.last_update = now;
+        true
+    }
+
+    fn display<C: LedController>(&self, controller: &mut C) -> Result<()> {
+        controller.set_all(self.current_color.to_rgb_spectrum());
+        controller.commit()
+    }
+}
+
+// </editor-fold>

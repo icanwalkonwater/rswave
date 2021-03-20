@@ -2,13 +2,13 @@ use realfft::{num_complex::Complex, RealFftPlanner, RealToComplex};
 use std::{cmp::Ordering, collections::VecDeque, f64::consts::PI, sync::Arc};
 
 pub const DEFAULT_SAMPLE_SIZE: usize = 2048;
-pub const DEFAULT_DELTA_HISTORY_SIZE: usize = 200;
+pub const DEFAULT_NOVELTY_BUFFER_SIZE: usize = 200;
 pub const COMPRESSION_CONST: f64 = 1000.0;
+pub const DEFAULT_SHORT_TERM_NOVELTY_SIZE: usize = 50;
 
 // Use f64 because TUI graphs expect f64 anyway, and we can afford it.
 pub struct AudioProcessor {
     sample_size: usize,
-    delta_history_size: usize,
 
     fft_planner: RealFftPlanner<f64>,
     fft: Arc<dyn RealToComplex<f64>>,
@@ -30,24 +30,25 @@ pub struct AudioProcessor {
     prev_output: Vec<f64>,
 
     novelty_curve: VecDeque<f64>,
+    short_term_novelty_size: usize,
 }
 
 impl Default for AudioProcessor {
     fn default() -> Self {
-        Self::new(DEFAULT_SAMPLE_SIZE, DEFAULT_DELTA_HISTORY_SIZE)
+        Self::new(DEFAULT_SAMPLE_SIZE, DEFAULT_NOVELTY_BUFFER_SIZE, DEFAULT_SHORT_TERM_NOVELTY_SIZE)
     }
 }
 
 impl AudioProcessor {
     /// Create a new [AudioProcessor].
     /// It will automatically create and manage the buffers required for the analysis.
-    pub fn new(sample_size: usize, delta_history_size: usize) -> Self {
+    pub fn new(sample_size: usize, novelty_buffer_size: usize, short_term_novelty_size: usize) -> Self {
+        assert!(short_term_novelty_size <= novelty_buffer_size);
         let mut fft_planner = RealFftPlanner::new();
         let fft = fft_planner.plan_fft_forward(sample_size);
 
         let mut processor = Self {
             sample_size,
-            delta_history_size,
 
             fft_planner,
             fft,
@@ -69,10 +70,11 @@ impl AudioProcessor {
             prev_output: vec![],
 
             novelty_curve: {
-                let mut queue = VecDeque::with_capacity(delta_history_size);
-                queue.resize(delta_history_size, 0.0);
+                let mut queue = VecDeque::with_capacity(novelty_buffer_size);
+                queue.resize(novelty_buffer_size, 0.0);
                 queue
             },
+            short_term_novelty_size,
         };
         processor.recreate_fft();
         processor
@@ -122,6 +124,15 @@ impl AudioProcessor {
     pub fn novelty_peak(&self) -> f64 {
         self.novelty_curve
             .iter()
+            .copied()
+            .max_by(|a, b| a.partial_cmp(b).unwrap_or(Ordering::Equal))
+            .unwrap_or(0.0)
+    }
+
+    pub fn novelty_peak_short_term(&self) -> f64 {
+        self.novelty_curve
+            .iter()
+            .skip(self.novelty_curve.len() - self.short_term_novelty_size)
             .copied()
             .max_by(|a, b| a.partial_cmp(b).unwrap_or(Ordering::Equal))
             .unwrap_or(0.0)
@@ -222,9 +233,7 @@ impl AudioProcessor {
             novelty += delta;
         }
 
-        if self.novelty_curve.len() == self.delta_history_size {
-            self.novelty_curve.pop_front();
-        }
+        self.novelty_curve.pop_front();
         self.novelty_curve.push_back(novelty);
     }
 }

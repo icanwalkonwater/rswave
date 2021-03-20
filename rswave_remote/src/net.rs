@@ -13,6 +13,7 @@ use rswave_common::{
     MAGIC,
 };
 use std::net::UdpSocket;
+use rswave_common::rkyv::Aligned;
 
 pub struct NetHandler {
     socket: UdpSocket,
@@ -20,7 +21,7 @@ pub struct NetHandler {
     stopped: bool,
 
     serialize_scratch: Option<Vec<u8>>,
-    deserialize_scratch: [u8; 128],
+    deserialize_scratch: Aligned<[u8; 128]>,
 }
 
 impl NetHandler {
@@ -34,27 +35,24 @@ impl NetHandler {
             mode: DataMode::Novelty,
             stopped: false,
             serialize_scratch: Some(Vec::new()),
-            deserialize_scratch: [0; 128],
+            deserialize_scratch: Aligned([0; 128]),
         })
     }
 
     fn serialize_send(&mut self, item: &impl Serialize<WriteSerializer<Vec<u8>>>) -> Result<()> {
-        // TODO: re-enable reusing of the scratch buffer
-        /*if let Some(scratch) = &mut self.serialize_scratch {
+        if let Some(scratch) = &mut self.serialize_scratch {
             scratch.clear();
         } else {
             self.serialize_scratch = Some(Vec::new());
-        }*/
+        }
 
-        let mut serializer = WriteSerializer::new(Vec::new());
+        let mut serializer = WriteSerializer::new(self.serialize_scratch.take().unwrap());
         serializer.serialize_value(item)?;
 
         let buff = serializer.into_inner();
-        println!("Sending {} bytes", buff.len());
-        println!("{:?}", buff);
         self.socket.send(&buff)?;
 
-        // self.serialize_scratch.replace(buff);
+        self.serialize_scratch.replace(buff);
         Ok(())
     }
 
@@ -64,9 +62,9 @@ impl NetHandler {
         self.serialize_send(&hello)?;
 
         self.socket
-            .recv(&mut self.deserialize_scratch)
+            .recv(self.deserialize_scratch.as_mut())
             .expect("Failed to receive");
-        let remote_hello = unsafe { archived_value::<HelloPacket>(&self.deserialize_scratch, 0) };
+        let remote_hello = unsafe { archived_value::<HelloPacket>(self.deserialize_scratch.as_mut(), 0) };
 
         if hello.magic != remote_hello.magic || hello.random != remote_hello.random {
             return Err(anyhow!("Handshake failed !"));
@@ -74,7 +72,6 @@ impl NetHandler {
 
         self.mode = mode;
         let mode = SetModePacket { mode };
-        println!("Send mode: {:?}", mode);
         self.serialize_send(&mode)?;
         Ok(())
     }
@@ -87,7 +84,7 @@ impl NetHandler {
     ) -> Result<()> {
         let novelty_data = NoveltyModeData {
             value: audio.novelty(),
-            peak: audio.novelty_peak(),
+            peak: audio.novelty_peak_short_term(),
         };
 
         match self.mode {
@@ -112,8 +109,8 @@ impl NetHandler {
     }
 
     fn check_ack(&mut self) -> Result<()> {
-        self.socket.recv(&mut self.deserialize_scratch)?;
-        let archived = unsafe { archived_value::<AckPacket>(&self.deserialize_scratch, 0) };
+        self.socket.recv(self.deserialize_scratch.as_mut())?;
+        let archived = unsafe { archived_value::<AckPacket>(self.deserialize_scratch.as_ref(), 0) };
         if let ArchivedAckPacket::Ok = archived {
             Ok(())
         } else {
@@ -139,8 +136,8 @@ impl NetHandler {
             }
         }
 
-        self.socket.recv(&mut self.deserialize_scratch)?;
-        let archived = unsafe { archived_value::<AckPacket>(&self.deserialize_scratch, 0) };
+        self.socket.recv(self.deserialize_scratch.as_mut())?;
+        let archived = unsafe { archived_value::<AckPacket>(self.deserialize_scratch.as_ref(), 0) };
         if let ArchivedAckPacket::Quit = archived {
             self.stopped = true;
             Ok(())

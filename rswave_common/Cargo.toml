@@ -5,6 +5,6 @@ authors = ["Lucas Malandrino <lucas.malandrino@gmail.com>"]
 edition = "2018"
 
 [dependencies]
-rkyv = { version = "0.4.1", features = ["strict", "validation"] }
-bytecheck = "0.4.1"
-rand = "0.8.3"
+rkyv = { version = "^0.4.2", features = ["strict", "validation"] }
+bytecheck = "^0.4.1"
+rand = "^0.8.3"

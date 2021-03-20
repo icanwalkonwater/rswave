@@ -224,13 +224,11 @@ impl App {
 
         // Send to remote and acknowledge
         if let Some(net) = self.net.as_mut() {
-            println!("Start send data");
             net.send_current_data(
                 &self.audio.processor,
                 self.spotify.as_ref(),
                 self.opt.no_ack,
             )?;
-            println!("Done send data");
         }
 
         // Time
@@ -351,7 +349,7 @@ impl App {
                     .block(
                         Block::default()
                             .title(format!(
-                                " FFT Data Magnitude - Compression: {} - {} samples ",
+                                " STFT Data Magnitude - Compression: {} - {} samples ",
                                 COMPRESSION_CONST,
                                 fft_data.len()
                             ))

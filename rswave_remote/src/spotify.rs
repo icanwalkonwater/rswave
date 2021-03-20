@@ -114,7 +114,7 @@ impl SpotifyTracker {
                                 - Duration::from_secs(secs as u64);
                             self.track_end_time = self.last_track_query;
                         }
-                        ApiError::Unauthorized => {
+                        ApiError::Unauthorized | _ => {
                             let token = rspotify::util::get_token(&mut self.oauth).await;
                             let cred = self
                                 .spotify
@@ -124,7 +124,6 @@ impl SpotifyTracker {
                                 .token_info(token.expect("Failed to refresh token"));
                             self.spotify = Spotify::default().client_credentials_manager(cred);
                         }
-                        _ => eprintln!("{:?}", err),
                     }
                 }
             }
