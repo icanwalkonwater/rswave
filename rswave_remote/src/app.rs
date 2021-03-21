@@ -13,7 +13,6 @@ use parking_lot::Mutex;
 use ringbuf::{Consumer, RingBuffer};
 use rswave_common::packets::DataMode;
 use std::{
-    cmp::Ordering,
     io::{stdout, Stdout},
     sync::Arc,
     time::{Duration, Instant},
@@ -81,7 +80,7 @@ impl App {
         let spotify = if let (Some(id), Some(secret)) =
             (opt.spotify_id.as_ref(), opt.spotify_secret.as_ref())
         {
-            Some(SpotifyTracker::new(id, secret).await?)
+            Some(SpotifyTracker::new(id, secret, opt.spotify_auth_fresh).await?)
         } else {
             None
         };
@@ -282,9 +281,7 @@ impl App {
         let max_novelty = self
             .audio
             .processor
-            .novelty_curve()
-            .max_by(|a, b| a.partial_cmp(b).unwrap_or(Ordering::Equal))
-            .unwrap_or(0.0);
+            .novelty_peak();
 
         let run_time_micros = self.run_time.as_micros();
         let draw_time_micros = self.draw_time.as_micros();

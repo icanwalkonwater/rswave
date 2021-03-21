@@ -24,7 +24,7 @@ pub struct SpotifyTracker {
 }
 
 impl SpotifyTracker {
-    pub async fn new(client_id: &str, client_secret: &str) -> Result<Self> {
+    pub async fn new(client_id: &str, client_secret: &str, no_cache: bool) -> Result<Self> {
         let mut oauth = SpotifyOAuth::default()
             .client_id(client_id)
             .client_secret(client_secret)
@@ -32,10 +32,13 @@ impl SpotifyTracker {
             .scope("user-read-currently-playing")
             .build();
 
-        // Ask for token (or get it from cache)
-        let token = rspotify::util::get_token(&mut oauth)
-            .await
-            .ok_or(anyhow!("Failed to get spotify token !"))?;
+        // Ask for token
+        let token = if no_cache {
+            rspotify::util::get_token_without_cache(&mut oauth).await
+        } else {
+            rspotify::util::get_token(&mut oauth).await
+        }
+        .ok_or(anyhow!("Failed to get spotify token !"))?;
 
         let credentials = SpotifyClientCredentials::default()
             .token_info(token)
@@ -110,11 +113,13 @@ impl SpotifyTracker {
                     match err {
                         ApiError::RateLimited(Some(secs)) => {
                             eprintln!("Rate limited for {} secs", secs);
-                            self.last_track_query = Instant::now() + REGULAR_TIMEOUT_THRESHOLD
+                            let now = Instant::now();
+                            self.last_track_query = now;
+                            self.track_end_time = now + REGULAR_TIMEOUT_THRESHOLD
                                 - Duration::from_secs(secs as u64);
-                            self.track_end_time = self.last_track_query;
                         }
                         ApiError::Unauthorized | _ => {
+                            // Re auth and retry
                             let token = rspotify::util::get_token(&mut self.oauth).await;
                             let cred = self
                                 .spotify

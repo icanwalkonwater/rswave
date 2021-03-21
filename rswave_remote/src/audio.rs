@@ -1,5 +1,6 @@
 use realfft::{num_complex::Complex, RealFftPlanner, RealToComplex};
 use std::{cmp::Ordering, collections::VecDeque, f64::consts::PI, sync::Arc};
+use realfft::num_traits::Pow;
 
 pub const DEFAULT_SAMPLE_SIZE: usize = 2048;
 pub const DEFAULT_NOVELTY_BUFFER_SIZE: usize = 200;
@@ -232,6 +233,8 @@ impl AudioProcessor {
             let delta = (val - self.prev_output[i]).max(0.0);
             novelty += delta;
         }
+        // Amplify data
+        novelty = novelty.pow(2);
 
         self.novelty_curve.pop_front();
         self.novelty_curve.push_back(novelty);

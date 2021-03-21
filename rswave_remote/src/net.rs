@@ -2,7 +2,7 @@ use crate::{audio::AudioProcessor, spotify::SpotifyTracker};
 use anyhow::{anyhow, Result};
 use rswave_common::{
     packets::{
-        AckPacket, ArchivedAckPacket, DataMode, GoodbyeData, HelloPacket, NoveltyBeatsModeData,
+        AckPacket, DataMode, GoodbyeData, HelloPacket, NoveltyBeatsModeData,
         NoveltyBeatsModePacket, NoveltyModeData, NoveltyModePacket, SetModePacket,
     },
     rkyv::{
@@ -13,7 +13,7 @@ use rswave_common::{
     MAGIC,
 };
 use std::net::UdpSocket;
-use rswave_common::rkyv::Aligned;
+use rswave_common::rkyv::{Aligned, Archived};
 
 pub struct NetHandler {
     socket: UdpSocket,
@@ -101,14 +101,14 @@ impl NetHandler {
             }
         }
 
-        if !no_ack {
+        /*if !no_ack {
             self.check_ack()?;
-        }
+        }*/
 
         Ok(())
     }
 
-    fn check_ack(&mut self) -> Result<()> {
+    /*fn check_ack(&mut self) -> Result<()> {
         self.socket.recv(self.deserialize_scratch.as_mut())?;
         let archived = unsafe { archived_value::<AckPacket>(self.deserialize_scratch.as_ref(), 0) };
         if let ArchivedAckPacket::Ok = archived {
@@ -116,7 +116,7 @@ impl NetHandler {
         } else {
             Err(anyhow!("Server quit/abort !"))
         }
-    }
+    }*/
 
     pub fn stop(&mut self, force: bool) -> Result<()> {
         match self.mode {
@@ -137,11 +137,12 @@ impl NetHandler {
         }
 
         self.socket.recv(self.deserialize_scratch.as_mut())?;
-        let archived = unsafe { archived_value::<AckPacket>(self.deserialize_scratch.as_ref(), 0) };
-        if let ArchivedAckPacket::Quit = archived {
+        let archived: &Archived<AckPacket> = unsafe { archived_value::<AckPacket>(self.deserialize_scratch.as_ref(), 0) };
+        if let Archived::<AckPacket>::Quit = archived {
             self.stopped = true;
             Ok(())
         } else {
+            println!("{:?}", archived);
             Err(anyhow!("Something went wrong somewhere !"))
         }
     }
