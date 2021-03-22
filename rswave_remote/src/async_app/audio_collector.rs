@@ -1,11 +1,12 @@
 use log::debug;
 use cpal::traits::{HostTrait, DeviceTrait, StreamTrait};
 use crate::async_app::errors::{ResultAudioCollector as Result, AudioCollectorError};
-use cpal::{SampleRate, SampleFormat};
+use cpal::{SampleRate, SampleFormat, Device, StreamConfig, SupportedStreamConfig};
 use std::collections::VecDeque;
 use crate::Opt;
-use ringbuf::{RingBuffer, Consumer};
-use tokio::sync::{Barrier, oneshot};
+use ringbuf::{RingBuffer, Consumer, Producer};
+use tokio::sync::{oneshot};
+use std::sync::Barrier;
 use std::sync::Arc;
 use tokio::task;
 use tokio::sync::oneshot::error::TryRecvError;
@@ -39,67 +40,15 @@ impl AudioCollector {
 
         // Ring buffer for buffering (lol) samples, 2 times the sample size so we don't lose any
         let buffer = RingBuffer::new(opt.sample_size * 2);
-        let (mut prod, cons) = buffer.split();
+        let (prod, cons) = buffer.split();
         // Vanilla barrier because cpal isn't async
-        let buffer_barrier = Arc::new(std::sync::Barrier::new(2));
-        let buffer_barrier_clone = buffer_barrier.clone();
+        let buffer_barrier = Arc::new(Barrier::new(2));
 
         // Setup collecting task
-        let (stop_signal, mut stop_recv) = oneshot::channel();
+        let (stop_signal, stop_recv) = oneshot::channel();
 
         let handle = tokio::task::spawn_blocking(move || {
-
-            // Create reader here because it isn't `Send`
-            let stream = match config.sample_format() {
-                SampleFormat::I16 => {
-                    device.build_input_stream(&config.into(), move |data: &[i16], _| {
-                        prod.push_iter(&mut data.iter().copied().map(|sample| sample as f64));
-                        if prod.len() >= opt.sample_size {
-                            // Notify we are ready to send this batch
-                            buffer_barrier_clone.wait();
-                        }
-                    }, move |err| panic!(err))
-                },
-                SampleFormat::U16 => {
-                    device.build_input_stream(
-                        &config.into(),
-                        move |data: &[u16], _| {
-                            prod.push_iter(
-                                &mut data
-                                    .iter()
-                                    .copied()
-                                    .map(|sample| sample as f64 - u16::max_value() as f64 / 2.0),
-                            );
-                            if prod.len() >= opt.sample_size {
-                                // Notify we are ready to send this batch
-                                buffer_barrier_clone.wait();
-                            }
-                        },
-                        |err| panic!(err),
-                    )
-                },
-                SampleFormat::F32 => {
-                    device.build_input_stream(
-                        &config.into(),
-                        move |data: &[f32], _| {
-                            prod.push_iter(&mut data.iter().copied().map(|sample| sample as f64));
-                            if prod.len() >= opt.sample_size {
-                                // Notify we are ready to send this batch
-                                buffer_barrier_clone.wait();
-                            }
-                        },
-                        |err| panic!(err),
-                    )
-                },
-            }.expect("Failed to create audio stream");
-
-            stream.play().expect("Failed to start playing audio stream");
-            while let Err(TryRecvError::Empty) = stop_recv.try_recv() {
-                // Wait for buffer to fill up
-                buffer_barrier.wait();
-            }
-            stream.pause().expect("Failed to pause audio stream");
-
+            Self::run(device, config, opt.sample_size, prod, buffer_barrier, stop_recv);
         });
 
         // Ok we have everything
@@ -108,6 +57,61 @@ impl AudioCollector {
             stop_signal,
             consumer: cons,
         })
+    }
+
+    fn run(device: Device, config: SupportedStreamConfig, sample_size: usize, mut prod: Producer<f64>, buffer_barrier: Arc<Barrier>, mut stop: oneshot::Receiver<bool>) {
+        let buffer_barrier_clone = buffer_barrier.clone();
+
+        // Create reader here because it isn't `Send`
+        let stream = match config.sample_format() {
+            SampleFormat::I16 => {
+                device.build_input_stream(&config.into(), move |data: &[i16], _| {
+                    prod.push_iter(&mut data.iter().copied().map(|sample| sample as f64));
+                    if prod.len() >= sample_size {
+                        // Notify we are ready to send this batch
+                        buffer_barrier_clone.wait();
+                    }
+                }, move |err| panic!(err))
+            },
+            SampleFormat::U16 => {
+                device.build_input_stream(
+                    &config.into(),
+                    move |data: &[u16], _| {
+                        prod.push_iter(
+                            &mut data
+                                .iter()
+                                .copied()
+                                .map(|sample| sample as f64 - u16::max_value() as f64 / 2.0),
+                        );
+                        if prod.len() >= sample_size {
+                            // Notify we are ready to send this batch
+                            buffer_barrier_clone.wait();
+                        }
+                    },
+                    |err| panic!(err),
+                )
+            },
+            SampleFormat::F32 => {
+                device.build_input_stream(
+                    &config.into(),
+                    move |data: &[f32], _| {
+                        prod.push_iter(&mut data.iter().copied().map(|sample| sample as f64));
+                        if prod.len() >= sample_size {
+                            // Notify we are ready to send this batch
+                            buffer_barrier_clone.wait();
+                        }
+                    },
+                    |err| panic!(err),
+                )
+            },
+        }.expect("Failed to create audio stream");
+
+        stream.play().expect("Failed to start playing audio stream");
+        while let Err(TryRecvError::Empty) = stop.try_recv() {
+            // Wait for buffer to fill up
+            buffer_barrier.wait();
+        }
+        stream.pause().expect("Failed to pause audio stream");
     }
 
     pub async fn stop(self) -> Result<()> {

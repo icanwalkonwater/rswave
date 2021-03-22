@@ -4,7 +4,7 @@ use crate::async_app::errors::ResultNet as Result;
 use std::net::{SocketAddr, SocketAddrV4, Ipv4Addr};
 
 pub struct NetHandler {
-    serialize_scratch: Option<Vec<u8>>,
+    serialize_scratch: Option<Box<[u8]>>,
     deserialize_scratch: Aligned<[u8; 128]>,
 }
 

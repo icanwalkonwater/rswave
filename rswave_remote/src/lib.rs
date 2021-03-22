@@ -50,6 +50,12 @@ pub struct Opt {
     #[structopt(long)]
     pub no_ack: bool,
 
+    /// Maximum interval between calls to the spotify API to check for
+    /// the currently playing track.
+    /// Too much requests will be rate limited so stay reasonable.
+    #[structopt(long, default_value = "5")]
+    pub spotify_refresh_interval: f32,
+
     /// The spotify client ID.
     // TODO: clap's requires() doesn't work
     #[structopt(long, env)]

@@ -2,18 +2,22 @@ pub mod net;
 pub mod app;
 pub mod audio_collector;
 pub mod audio_processor;
+pub mod spotify;
 
 pub mod errors {
     use thiserror::Error;
 
     pub type Result<T> = std::result::Result<T, RsWaveError>;
     pub type ResultAudioCollector<T> = std::result::Result<T, AudioCollectorError>;
+    pub type ResultSpotify<T> = std::result::Result<T, SpotifyError>;
     pub type ResultNet<T> = std::result::Result<T, NetError>;
 
     #[derive(Debug, Error)]
     pub enum RsWaveError {
         #[error(transparent)]
         AudioCollectorError(#[from] AudioCollectorError),
+        #[error(transparent)]
+        SpotifyError(#[from] SpotifyError),
         #[error(transparent)]
         NetError(#[from] NetError),
     }
@@ -36,6 +40,12 @@ pub mod errors {
         CpalBuildStreamError(#[from] cpal::BuildStreamError),
         #[error("Failed to stop audio collector !")]
         FailedToStopTask,
+    }
+
+    #[derive(Debug, Error)]
+    pub enum SpotifyError {
+        #[error("Unable to get spotify access token !")]
+        UnableToGetAccessToken,
     }
 
     #[derive(Debug, Error)]

@@ -13,17 +13,17 @@ pub struct AudioProcessor {
     fft_planner: RealFftPlanner<f64>,
     fft: Arc<dyn RealToComplex<f64>>,
 
-    window: Vec<f64>,
-    input: Vec<f64>,
+    window: Box<[f64]>,
+    input: Box<[f64]>,
     // Stereo L/R
-    raw_data: (Vec<f64>, Vec<f64>),
-    fft_scratch: Vec<Complex<f64>>,
+    raw_data: (Box<[f64]>, Box<[f64]>),
+    fft_scratch: Box<[Complex<f64>]>,
     // Stereo L/R
-    fft_data: (Vec<Complex<f64>>, Vec<Complex<f64>>),
+    fft_data: (Box<[Complex<f64>]>, Box<[Complex<f64>]>),
 
     peak_input: f64,
-    output: Vec<f64>,
-    prev_output: Vec<f64>,
+    output: Box<[f64]>,
+    prev_output: Box<[f64]>,
 
     novelty_curve: VecDeque<f64>,
 }
@@ -38,19 +38,20 @@ impl AudioProcessor {
         let mut fft_planner = RealFftPlanner::new();
         let fft = fft_planner.plan_fft_forward(opt.sample_size);
 
-        let raw_data = (fft.make_input_vec(), fft.make_input_vec());
-        let fft_scratch = fft.make_scratch_vec();
-        let fft_data = (fft.make_output_vec(), fft.make_output_vec());
+        let raw_data = (fft.make_input_vec().into_boxed_slice(), fft.make_input_vec().into_boxed_slice());
+        let fft_scratch = fft.make_scratch_vec().into_boxed_slice();
+        let fft_data = (fft.make_output_vec().into_boxed_slice(), fft.make_output_vec().into_boxed_slice());
 
-        let input = vec![0.0; raw_data.0.len() + raw_data.1.len()];
-        let output = vec![0.0; fft_data.0.len()];
-        let prev_output = vec![0.0; output.len()];
+        let input = vec![0.0; raw_data.0.len() + raw_data.1.len()].into_boxed_slice();
+        let output = vec![0.0; fft_data.0.len()].into_boxed_slice();
+        let prev_output = vec![0.0; output.len()].into_boxed_slice();
 
         // Hann window
         let window = (0..raw_data.0.len())
             .into_iter()
             .map(|i| 0.5 * (1.0 - (2.0 * PI * i as f64 / (opt.sample_size as f64 - 1.0)).cos()))
-            .collect();
+            .collect::<Vec<_>>()
+            .into_boxed_slice();
 
         let mut novelty_curve = VecDeque::with_capacity(opt.novelty_size);
         novelty_curve.resize(opt.novelty_size, 0.0);
