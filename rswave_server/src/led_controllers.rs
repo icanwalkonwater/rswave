@@ -155,15 +155,17 @@ impl LedController for ControllerGpio {
     }
 
     fn set_all(&mut self, color: ColorRGB) {
+        let freq = self.freq;
+
         // The actual set_pwm_frequency function always returns Ok, so we can unwrap
         self.red()
-            .set_pwm_frequency(self.freq, color.r as f64 / 255.0)
+            .set_pwm_frequency(freq, color.r as f64 / 255.0)
             .unwrap();
         self.green()
-            .set_pwm_frequency(self.freq, color.g as f64 / 255.0)
+            .set_pwm_frequency(freq, color.g as f64 / 255.0)
             .unwrap();
         self.blue()
-            .set_pwm_frequency(self.freq, color.b as f64 / 255.0)
+            .set_pwm_frequency(freq, color.b as f64 / 255.0)
             .unwrap();
     }
 

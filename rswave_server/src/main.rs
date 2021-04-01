@@ -31,7 +31,7 @@ fn main() -> anyhow::Result<()> {
             #[cfg(feature = "controller_gpio")]
             run_app(
                 opt,
-                ControllerGpio::new(opt.pin_red, opt.pin_green, opt.pin_blue)?,
+                ControllerGpio::new(opt.pwm_freq, opt.pin_red, opt.pin_green, opt.pin_blue)?,
             )?;
         }
     }
