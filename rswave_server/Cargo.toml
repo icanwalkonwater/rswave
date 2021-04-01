@@ -6,12 +6,14 @@ edition = "2018"
 default-run = "rswave_server"
 
 [features]
-default = ["controller_ws2811"]
+default = ["controller_ws2811", "controller_gpio"]
 controller_ws2811 = ["rs_ws281x"]
+controller_gpio = ["rppal"]
 
 [dependencies]
 rswave_common = { path = "../rswave_common" }
 rs_ws281x = { version = "^0.4.2", optional = true }
+rppal = { version = "0.11.3", optional = true }
 cichlid = "^0.2.1"
 rand = "^0.8.3"
 

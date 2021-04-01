@@ -1,5 +1,6 @@
 use anyhow::Result;
 use cichlid::ColorRGB;
+use rppal::gpio::{Gpio, OutputPin};
 #[cfg(feature = "controller_ws2811")]
 use rs_ws281x::{ChannelBuilder, ControllerBuilder, RawColor, StripType};
 
@@ -98,5 +99,63 @@ impl LedController for ControllerWs2811 {
             *led = Self::COLOR_OFF;
         }
         self.commit()
+    }
+}
+
+pub struct ControllerGpio {
+    gpio: Gpio
+    red: OutputPin,
+    green: OutputPin,
+    blue: OutputPin,
+}
+
+impl ControllerGpio {
+    const RED_PIN: u8 = 23;
+    const GREEN_PIN: u8 = 24;
+    const BLUE_PIN: u8 = 25;
+    const FREQ: f64 = 100.0;
+
+    pub fn new() -> Result<Self> {
+        let gpio = Gpio::new()?;
+        let mut red = gpio.get(Self::RED_PIN)?.into_output();
+        let mut green = gpio.get(Self::GREEN_PIN)?.into_output();
+        let mut blue = gpio.get(Self::BLUE_PIN)?.into_output();
+        red.set_pwm_frequency(Self::FREQ, 0.0)?;
+        green.set_pwm_frequency(Self::FREQ, 0.0)?;
+        blue.set_pwm_frequency(Self::FREQ, 0.0)?;
+
+        Ok(Self { gpio, red, green, blue })
+    }
+}
+
+impl LedController for ControllerGpio {
+    fn is_addressable_individually() -> bool {
+        false
+    }
+
+    fn led_amount(&self) -> usize {
+        1
+    }
+
+    fn set_all(&mut self, color: ColorRGB) {
+        self.red.set_pwm_frequency(Self::FREQ, color.r as f64 / 255.0).unwrap();
+        self.green.set_pwm_frequency(Self::FREQ, color.r as f64 / 255.0).unwrap();
+        self.blue.set_pwm_frequency(Self::FREQ, color.r as f64 / 255.0).unwrap();
+    }
+
+    fn set_all_individual(&mut self, colors: &[ColorRGB]) {
+        unimplemented!()
+    }
+
+    fn set_individual(&mut self, i: usize, color: ColorRGB) {
+        self.set_all(color);
+    }
+
+    fn commit(&mut self) -> Result<()> {
+        // no-op
+    }
+
+    fn reset(&mut self) -> Result<()> {
+        todo!()
     }
 }
