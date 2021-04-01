@@ -1,16 +1,22 @@
+use crate::{
+    async_app::errors::{AudioCollectorError, ResultAudioCollector as Result},
+    Opt,
+};
+use cpal::{
+    traits::{DeviceTrait, HostTrait, StreamTrait},
+    Device, SampleFormat, SampleRate, StreamConfig, SupportedStreamConfig,
+};
 use log::debug;
-use cpal::traits::{HostTrait, DeviceTrait, StreamTrait};
-use crate::async_app::errors::{ResultAudioCollector as Result, AudioCollectorError};
-use cpal::{SampleRate, SampleFormat, Device, StreamConfig, SupportedStreamConfig};
-use std::collections::VecDeque;
-use crate::Opt;
-use ringbuf::{RingBuffer, Consumer, Producer};
-use tokio::sync::{oneshot};
-use std::sync::Barrier;
-use std::sync::Arc;
-use tokio::task;
-use tokio::sync::oneshot::error::TryRecvError;
-use tokio::task::JoinHandle;
+use ringbuf::{Consumer, Producer, RingBuffer};
+use std::{
+    collections::VecDeque,
+    sync::{Arc, Barrier},
+};
+use tokio::{
+    sync::{oneshot, oneshot::error::TryRecvError},
+    task,
+    task::JoinHandle,
+};
 
 pub struct AudioCollector {
     pub(crate) handle: task::JoinHandle<()>,
@@ -28,7 +34,8 @@ impl AudioCollector {
                 .find(|device| device.name().map_or(false, |name| name.contains(hint)))
         } else {
             host.default_input_device()
-        }.ok_or(AudioCollectorError::AudioDeviceNotFound)?;
+        }
+        .ok_or(AudioCollectorError::AudioDeviceNotFound)?;
 
         // Get config and check if we can handle it
         let config = device.default_input_config()?;
@@ -48,7 +55,14 @@ impl AudioCollector {
         let (stop_signal, stop_recv) = oneshot::channel();
 
         let handle = tokio::task::spawn_blocking(move || {
-            Self::run(device, config, opt.sample_size, prod, buffer_barrier, stop_recv);
+            Self::run(
+                device,
+                config,
+                opt.sample_size,
+                prod,
+                buffer_barrier,
+                stop_recv,
+            );
         });
 
         // Ok we have everything
@@ -59,20 +73,31 @@ impl AudioCollector {
         })
     }
 
-    fn run(device: Device, config: SupportedStreamConfig, sample_size: usize, mut prod: Producer<f64>, buffer_barrier: Arc<Barrier>, mut stop: oneshot::Receiver<bool>) {
+    fn run(
+        device: Device,
+        config: SupportedStreamConfig,
+        sample_size: usize,
+        mut prod: Producer<f64>,
+        buffer_barrier: Arc<Barrier>,
+        mut stop: oneshot::Receiver<bool>,
+    ) {
         let buffer_barrier_clone = buffer_barrier.clone();
 
         // Create reader here because it isn't `Send`
         let stream = match config.sample_format() {
             SampleFormat::I16 => {
-                device.build_input_stream(&config.into(), move |data: &[i16], _| {
-                    prod.push_iter(&mut data.iter().copied().map(|sample| sample as f64));
-                    if prod.len() >= sample_size {
-                        // Notify we are ready to send this batch
-                        buffer_barrier_clone.wait();
-                    }
-                }, move |err| panic!(err))
-            },
+                device.build_input_stream(
+                    &config.into(),
+                    move |data: &[i16], _| {
+                        prod.push_iter(&mut data.iter().copied().map(|sample| sample as f64));
+                        if prod.len() >= sample_size {
+                            // Notify we are ready to send this batch
+                            buffer_barrier_clone.wait();
+                        }
+                    },
+                    move |err| panic!(err),
+                )
+            }
             SampleFormat::U16 => {
                 device.build_input_stream(
                     &config.into(),
@@ -90,7 +115,7 @@ impl AudioCollector {
                     },
                     |err| panic!(err),
                 )
-            },
+            }
             SampleFormat::F32 => {
                 device.build_input_stream(
                     &config.into(),
@@ -103,8 +128,9 @@ impl AudioCollector {
                     },
                     |err| panic!(err),
                 )
-            },
-        }.expect("Failed to create audio stream");
+            }
+        }
+        .expect("Failed to create audio stream");
 
         stream.play().expect("Failed to start playing audio stream");
         while let Err(TryRecvError::Empty) = stop.try_recv() {
@@ -118,7 +144,9 @@ impl AudioCollector {
         // If we can't send the signal it means that the
         // other has been dropped, so we don't need to await it
         if let Ok(_) = self.stop_signal.send(true) {
-            self.handle.await.map_err(|_| AudioCollectorError::FailedToStopTask)?;
+            self.handle
+                .await
+                .map_err(|_| AudioCollectorError::FailedToStopTask)?;
         }
 
         Ok(())

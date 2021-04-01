@@ -8,12 +8,11 @@ use rswave_common::{
     rkyv::{
         archived_value,
         ser::{serializers::WriteSerializer, Serializer},
-        Serialize,
+        Aligned, Archived, Serialize,
     },
     MAGIC,
 };
 use std::net::UdpSocket;
-use rswave_common::rkyv::{Aligned, Archived};
 
 pub struct NetHandler {
     socket: UdpSocket,
@@ -64,7 +63,8 @@ impl NetHandler {
         self.socket
             .recv(self.deserialize_scratch.as_mut())
             .expect("Failed to receive");
-        let remote_hello = unsafe { archived_value::<HelloPacket>(self.deserialize_scratch.as_mut(), 0) };
+        let remote_hello =
+            unsafe { archived_value::<HelloPacket>(self.deserialize_scratch.as_mut(), 0) };
 
         if hello.magic != remote_hello.magic || hello.random != remote_hello.random {
             return Err(anyhow!("Handshake failed !"));
@@ -137,7 +137,8 @@ impl NetHandler {
         }
 
         self.socket.recv(self.deserialize_scratch.as_mut())?;
-        let archived: &Archived<AckPacket> = unsafe { archived_value::<AckPacket>(self.deserialize_scratch.as_ref(), 0) };
+        let archived: &Archived<AckPacket> =
+            unsafe { archived_value::<AckPacket>(self.deserialize_scratch.as_ref(), 0) };
         if let Archived::<AckPacket>::Quit = archived {
             self.stopped = true;
             Ok(())

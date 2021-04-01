@@ -1,14 +1,10 @@
 use log::{debug, info};
-use rswave_server::{
-    app::App,
-    led_controllers::{LedController},
-    LedStripType, Opt,
-};
-use structopt::StructOpt;
 #[cfg(feature = "controller_gpio")]
 use rswave_server::led_controllers::ControllerGpio;
 #[cfg(feature = "controller_ws2811")]
 use rswave_server::led_controllers::ControllerWs2811;
+use rswave_server::{app::App, led_controllers::LedController, LedStripType, Opt};
+use structopt::StructOpt;
 
 fn main() -> anyhow::Result<()> {
     env_logger::init();
@@ -23,14 +19,20 @@ fn main() -> anyhow::Result<()> {
             #[cfg(not(feature = "controller_ws2811"))]
             eprintln!("LED type WS2811 is not supported by this build !");
             #[cfg(feature = "controller_ws2811")]
-            run_app(opt, ControllerWs2811::new(opt.led_count.unwrap(), opt.brightness)?)?;
+            run_app(
+                opt,
+                ControllerWs2811::new(opt.led_count.unwrap(), opt.brightness)?,
+            )?;
         }
         LedStripType::Gpio => {
             info!("Choosed led type GPIO");
             #[cfg(not(feature = "controller_gpio"))]
             eprintln!("LED type GPIO is not supported by this build !");
             #[cfg(feature = "controller_gpio")]
-            run_app(opt, ControllerGpio::new(opt.pin_red, opt.pin_green, opt.pin_blue)?)?;
+            run_app(
+                opt,
+                ControllerGpio::new(opt.pin_red, opt.pin_green, opt.pin_blue)?,
+            )?;
         }
     }
 

@@ -1,10 +1,10 @@
 use rswave_common::{
     packets::{NoveltyBeatsModeData, NoveltyBeatsModePacket, NoveltyModeData},
     rkyv::{
-        Deserialize,
         check_archive,
         de::deserializers::AllocDeserializer,
         ser::{serializers::WriteSerializer, Serializer},
+        Deserialize,
     },
 };
 
@@ -20,7 +20,10 @@ fn main() {
     let mut serializer = WriteSerializer::new(Vec::new());
     serializer.serialize_value(&packet).unwrap();
     let data = serializer.into_inner();
-    println!("Deserialize buffer alignment: {}", (data.as_ptr() as usize).trailing_zeros());
+    println!(
+        "Deserialize buffer alignment: {}",
+        (data.as_ptr() as usize).trailing_zeros()
+    );
     println!("({}) {:?}", data.len(), data);
 
     let archive = check_archive::<NoveltyBeatsModePacket>(&data, 0).unwrap();

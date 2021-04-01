@@ -1,7 +1,10 @@
 use crate::{
     led_controllers::LedController,
     net::{NetHandler, RemoteData},
-    runners::{NoopRunner, Runner, RunnerEnum, SimpleBeatRunner, StandbyRunner},
+    runners::{
+        EpilepsyRunner, NoopRunner, Runner, RunnerEnum, SimpleBeatRunner, StandbyRunner,
+        WhiteRunner,
+    },
     Opt,
 };
 use anyhow::Result;
@@ -11,7 +14,6 @@ use std::{
     thread::JoinHandle,
     time::{Duration, Instant},
 };
-use crate::runners::{EpilepsyRunner, WhiteRunner};
 
 #[derive(Debug, Copy, Clone)]
 pub(crate) enum ControllerMessage {

@@ -278,10 +278,7 @@ impl App {
 
         let max_data = self.audio.processor.peak_input() * 1.1;
         let max_fft = self.audio.processor.peak_output() * 1.2;
-        let max_novelty = self
-            .audio
-            .processor
-            .novelty_peak();
+        let max_novelty = self.audio.processor.novelty_peak();
 
         let run_time_micros = self.run_time.as_micros();
         let draw_time_micros = self.draw_time.as_micros();

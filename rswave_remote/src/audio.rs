@@ -1,6 +1,5 @@
-use realfft::{num_complex::Complex, RealFftPlanner, RealToComplex};
+use realfft::{num_complex::Complex, num_traits::Pow, RealFftPlanner, RealToComplex};
 use std::{cmp::Ordering, collections::VecDeque, f64::consts::PI, sync::Arc};
-use realfft::num_traits::Pow;
 
 pub const DEFAULT_SAMPLE_SIZE: usize = 2048;
 pub const DEFAULT_NOVELTY_BUFFER_SIZE: usize = 200;
@@ -36,14 +35,22 @@ pub struct AudioProcessor {
 
 impl Default for AudioProcessor {
     fn default() -> Self {
-        Self::new(DEFAULT_SAMPLE_SIZE, DEFAULT_NOVELTY_BUFFER_SIZE, DEFAULT_SHORT_TERM_NOVELTY_SIZE)
+        Self::new(
+            DEFAULT_SAMPLE_SIZE,
+            DEFAULT_NOVELTY_BUFFER_SIZE,
+            DEFAULT_SHORT_TERM_NOVELTY_SIZE,
+        )
     }
 }
 
 impl AudioProcessor {
     /// Create a new [AudioProcessor].
     /// It will automatically create and manage the buffers required for the analysis.
-    pub fn new(sample_size: usize, novelty_buffer_size: usize, short_term_novelty_size: usize) -> Self {
+    pub fn new(
+        sample_size: usize,
+        novelty_buffer_size: usize,
+        short_term_novelty_size: usize,
+    ) -> Self {
         assert!(short_term_novelty_size <= novelty_buffer_size);
         let mut fft_planner = RealFftPlanner::new();
         let fft = fft_planner.plan_fft_forward(sample_size);

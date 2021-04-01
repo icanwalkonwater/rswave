@@ -1,5 +1,5 @@
 use anyhow::{anyhow, Result};
-use log::{debug, info, error};
+use log::{debug, error, info};
 use rswave_common::{
     packets::{
         AckPacket, DataMode, HelloPacket, NoveltyBeatsModePacket, NoveltyModePacket, SetModePacket,
@@ -8,7 +8,7 @@ use rswave_common::{
         archived_value, check_archive,
         de::deserializers::AllocDeserializer,
         ser::{serializers::WriteSerializer, Serializer},
-        Deserialize, Serialize,
+        Aligned, Deserialize, Serialize,
     },
     MAGIC,
 };
@@ -17,7 +17,6 @@ use std::{
     net::{SocketAddr, UdpSocket},
     time::Duration,
 };
-use rswave_common::rkyv::Aligned;
 
 #[derive(Debug)]
 pub enum RemoteData {
@@ -125,9 +124,11 @@ impl NetHandler {
 
         let res = match self.mode {
             DataMode::Novelty => {
-                let packet =
-                    check_archive::<NoveltyModePacket>(&self.deserialize_scratch.as_ref()[..len], 0)
-                        .map_err(|err| anyhow!("Check archive failed: {}", err))?;
+                let packet = check_archive::<NoveltyModePacket>(
+                    &self.deserialize_scratch.as_ref()[..len],
+                    0,
+                )
+                .map_err(|err| anyhow!("Check archive failed: {}", err))?;
                 let packet: NoveltyModePacket = packet.deserialize(&mut AllocDeserializer)?;
 
                 match packet {
@@ -146,9 +147,11 @@ impl NetHandler {
             DataMode::NoveltyBeats => {
                 // TODO: don't deserialize, use the archive
 
-                let packet =
-                    check_archive::<NoveltyBeatsModePacket>(&self.deserialize_scratch.as_ref()[..len], 0)
-                        .map_err(|err| anyhow!("Check archive failed: {}", err))?;
+                let packet = check_archive::<NoveltyBeatsModePacket>(
+                    &self.deserialize_scratch.as_ref()[..len],
+                    0,
+                )
+                .map_err(|err| anyhow!("Check archive failed: {}", err))?;
                 let packet: NoveltyBeatsModePacket = packet.deserialize(&mut AllocDeserializer)?;
 
                 match packet {

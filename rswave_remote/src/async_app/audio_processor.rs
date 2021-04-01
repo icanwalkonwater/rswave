@@ -1,9 +1,6 @@
 use crate::Opt;
-use realfft::num_complex::Complex;
-use realfft::{RealFftPlanner, RealToComplex};
-use std::collections::VecDeque;
-use std::sync::Arc;
-use std::f64::consts::PI;
+use realfft::{num_complex::Complex, RealFftPlanner, RealToComplex};
+use std::{collections::VecDeque, f64::consts::PI, sync::Arc};
 
 pub struct AudioProcessor {
     sample_size: usize,
@@ -38,9 +35,15 @@ impl AudioProcessor {
         let mut fft_planner = RealFftPlanner::new();
         let fft = fft_planner.plan_fft_forward(opt.sample_size);
 
-        let raw_data = (fft.make_input_vec().into_boxed_slice(), fft.make_input_vec().into_boxed_slice());
+        let raw_data = (
+            fft.make_input_vec().into_boxed_slice(),
+            fft.make_input_vec().into_boxed_slice(),
+        );
         let fft_scratch = fft.make_scratch_vec().into_boxed_slice();
-        let fft_data = (fft.make_output_vec().into_boxed_slice(), fft.make_output_vec().into_boxed_slice());
+        let fft_data = (
+            fft.make_output_vec().into_boxed_slice(),
+            fft.make_output_vec().into_boxed_slice(),
+        );
 
         let input = vec![0.0; raw_data.0.len() + raw_data.1.len()].into_boxed_slice();
         let output = vec![0.0; fft_data.0.len()].into_boxed_slice();
@@ -115,7 +118,13 @@ impl AudioProcessor {
 
         // Post-process spectrum
         let scale_coeff = 1.0 / (self.fft_data.0.len() as f64).sqrt();
-        for (i, (left, right)) in self.fft_data.0.iter().zip(self.fft_data.1.iter()).enumerate() {
+        for (i, (left, right)) in self
+            .fft_data
+            .0
+            .iter()
+            .zip(self.fft_data.1.iter())
+            .enumerate()
+        {
             // Normalize values them combine them
             // Average L/R
             let mut val = (left.scale(scale_coeff).norm() + right.scale(scale_coeff).norm()) / 2.0;
@@ -125,7 +134,11 @@ impl AudioProcessor {
         }
 
         // Novelty curve
-        let novelty = self.output.iter().copied().enumerate()
+        let novelty = self
+            .output
+            .iter()
+            .copied()
+            .enumerate()
             .map(|(i, val)| (val - self.prev_output[i]).max(0.0))
             .sum();
 

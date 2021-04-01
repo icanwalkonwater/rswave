@@ -1,9 +1,9 @@
 use structopt::StructOpt;
 
 pub mod app;
+pub mod async_app;
 pub mod audio;
 pub mod net;
-pub mod async_app;
 pub mod spotify;
 
 #[derive(Clone, Debug, StructOpt)]

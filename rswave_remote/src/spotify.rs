@@ -115,8 +115,8 @@ impl SpotifyTracker {
                             eprintln!("Rate limited for {} secs", secs);
                             let now = Instant::now();
                             self.last_track_query = now;
-                            self.track_end_time = now + REGULAR_TIMEOUT_THRESHOLD
-                                - Duration::from_secs(secs as u64);
+                            self.track_end_time =
+                                now + REGULAR_TIMEOUT_THRESHOLD - Duration::from_secs(secs as u64);
                         }
                         ApiError::Unauthorized | _ => {
                             // Re auth and retry

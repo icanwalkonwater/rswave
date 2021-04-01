@@ -1,7 +1,7 @@
-pub mod net;
 pub mod app;
 pub mod audio_collector;
 pub mod audio_processor;
+pub mod net;
 pub mod spotify;
 
 pub mod errors {
@@ -51,6 +51,6 @@ pub mod errors {
     #[derive(Debug, Error)]
     pub enum NetError {
         #[error("Hey")]
-        Hey
+        Hey,
     }
 }

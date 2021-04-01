@@ -1,14 +1,21 @@
-use crate::async_app::errors::{ResultSpotify as Result, SpotifyError};
-use crate::Opt;
-use rspotify::client::{ApiError, Spotify};
-use rspotify::model::audio::{AudioAnalysis, AudioAnalysisMeasure};
-use rspotify::model::playing::Playing;
-use rspotify::model::track::FullTrack;
-use rspotify::oauth2::{SpotifyClientCredentials, SpotifyOAuth};
-use std::sync::Arc;
-use std::time::{Duration, Instant};
-use tokio::sync::Mutex;
-use tokio::task::JoinHandle;
+use crate::{
+    async_app::errors::{ResultSpotify as Result, SpotifyError},
+    Opt,
+};
+use rspotify::{
+    client::{ApiError, Spotify},
+    model::{
+        audio::{AudioAnalysis, AudioAnalysisMeasure},
+        playing::Playing,
+        track::FullTrack,
+    },
+    oauth2::{SpotifyClientCredentials, SpotifyOAuth},
+};
+use std::{
+    sync::Arc,
+    time::{Duration, Instant},
+};
+use tokio::{sync::Mutex, task::JoinHandle};
 
 pub struct SpotifyHolder {
     track: Arc<Mutex<Option<TrackHolder>>>,
@@ -184,7 +191,8 @@ impl TrackHolder {
     pub fn advance_beat(&mut self) {
         let progress = self.compute_real_progress_ms() as f32 / 1000.0;
 
-        let beat = self.beats
+        let beat = self
+            .beats
             .iter()
             .enumerate()
             .skip(self.last_beat_index)
