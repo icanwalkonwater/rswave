@@ -11,7 +11,7 @@ use std::{
     thread::JoinHandle,
     time::{Duration, Instant},
 };
-use crate::runners::IntenseRunner;
+use crate::runners::{EpilepsyRunner, WhiteRunner};
 
 #[derive(Debug, Copy, Clone)]
 pub(crate) enum ControllerMessage {
@@ -69,7 +69,8 @@ impl<C: LedController + Send + 'static> App<C> {
                             info!("Runner: standby");
                         }
                         msg @ ControllerMessage::RandomRunner => {
-                            runner = IntenseRunner::new().into();
+                            runner = EpilepsyRunner::new().into();
+                            // runner = WhiteRunner::new().into();
                             *msg = ControllerMessage::Noop;
                             info!("Runner: common");
                         }

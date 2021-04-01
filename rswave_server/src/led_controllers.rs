@@ -15,6 +15,8 @@ pub trait LedController {
     fn reset(&mut self) -> Result<()>;
 }
 
+// Controller WS2811
+// <editor-fold>
 #[cfg(feature = "controller_ws2811")]
 pub struct ControllerWs2811 {
     inner: rs_ws281x::Controller,
@@ -101,33 +103,48 @@ impl LedController for ControllerWs2811 {
         self.commit()
     }
 }
+// </editor-fold>
 
+// GPIO Controller
+// <editor-fold>
+#[cfg(feature = "controller_gpio")]
 pub struct ControllerGpio {
-    gpio: Gpio
-    red: OutputPin,
-    green: OutputPin,
-    blue: OutputPin,
+    gpio: Gpio,
+    freq: f64,
+    pins: [OutputPin; 3],
 }
 
+#[cfg(feature = "controller_gpio")]
 impl ControllerGpio {
-    const RED_PIN: u8 = 23;
-    const GREEN_PIN: u8 = 24;
-    const BLUE_PIN: u8 = 25;
-    const FREQ: f64 = 100.0;
-
-    pub fn new() -> Result<Self> {
+    pub fn new(freq: f64, red: u8, green: u8, blue: u8) -> Result<Self> {
         let gpio = Gpio::new()?;
-        let mut red = gpio.get(Self::RED_PIN)?.into_output();
-        let mut green = gpio.get(Self::GREEN_PIN)?.into_output();
-        let mut blue = gpio.get(Self::BLUE_PIN)?.into_output();
-        red.set_pwm_frequency(Self::FREQ, 0.0)?;
-        green.set_pwm_frequency(Self::FREQ, 0.0)?;
-        blue.set_pwm_frequency(Self::FREQ, 0.0)?;
+        let red = gpio.get(red)?.into_output();
+        let green = gpio.get(green)?.into_output();
+        let blue = gpio.get(blue)?.into_output();
+        let pins = [red, green, blue];
 
-        Ok(Self { gpio, red, green, blue })
+        let mut controller = Self { gpio, freq, pins };
+        controller.reset()?;
+        Ok(controller)
+    }
+
+    #[inline]
+    fn red(&mut self) -> &mut OutputPin {
+        &mut self.pins[0]
+    }
+
+    #[inline]
+    fn green(&mut self) -> &mut OutputPin {
+        &mut self.pins[1]
+    }
+
+    #[inline]
+    fn blue(&mut self) -> &mut OutputPin {
+        &mut self.pins[2]
     }
 }
 
+#[cfg(feature = "controller_gpio")]
 impl LedController for ControllerGpio {
     fn is_addressable_individually() -> bool {
         false
@@ -138,24 +155,31 @@ impl LedController for ControllerGpio {
     }
 
     fn set_all(&mut self, color: ColorRGB) {
-        self.red.set_pwm_frequency(Self::FREQ, color.r as f64 / 255.0).unwrap();
-        self.green.set_pwm_frequency(Self::FREQ, color.r as f64 / 255.0).unwrap();
-        self.blue.set_pwm_frequency(Self::FREQ, color.r as f64 / 255.0).unwrap();
+        // The actual set_pwm_frequency function always returns Ok, so we can unwrap
+        self.red().set_pwm_frequency(self.freq, color.r as f64 / 255.0).unwrap();
+        self.green().set_pwm_frequency(self.freq, color.g as f64 / 255.0).unwrap();
+        self.blue().set_pwm_frequency(self.freq, color.b as f64 / 255.0).unwrap();
     }
 
-    fn set_all_individual(&mut self, colors: &[ColorRGB]) {
+    fn set_all_individual(&mut self, _: &[ColorRGB]) {
         unimplemented!()
     }
 
-    fn set_individual(&mut self, i: usize, color: ColorRGB) {
+    fn set_individual(&mut self, _: usize, color: ColorRGB) {
         self.set_all(color);
     }
 
     fn commit(&mut self) -> Result<()> {
         // no-op
+        Ok(())
     }
 
     fn reset(&mut self) -> Result<()> {
-        todo!()
+        for pin in self.pins.iter_mut() {
+            pin.clear_pwm()?;
+            pin.set_low();
+        }
+        Ok(())
     }
 }
+// <editor-fold>

@@ -9,8 +9,9 @@ use std::time::Instant;
 pub enum RunnerEnum {
     NoopRunner,
     StandbyRunner,
+    WhiteRunner,
     SimpleBeatRunner,
-    IntenseRunner,
+    EpilepsyRunner,
 }
 
 #[enum_dispatch(RunnerEnum)]
@@ -108,6 +109,45 @@ impl Runner for StandbyRunner {
 }
 // </editor-fold>
 
+// White runner (for debug purposes mainly)
+// <editor-fold>
+pub struct WhiteRunner {
+    value: f32,
+    gravity: f32,
+    last_update: Instant,
+}
+
+impl WhiteRunner {
+    pub fn new() -> Self {
+        Self {
+            value: 0.0,
+            gravity: 500.0,
+            last_update: Instant::now(),
+        }
+    }
+}
+
+impl Runner for WhiteRunner {
+    fn beat(&mut self) {
+        self.value = 255.0;
+    }
+
+    fn run_once(&mut self) -> bool {
+        let now = Instant::now();
+        let delta_time = now.duration_since(self.last_update).as_secs_f32();
+        self.value = (self.value - self.gravity * delta_time).max(0.0);
+        self.last_update = now;
+        true
+    }
+
+    fn display<C: LedController>(&self, controller: &mut C) -> Result<()> {
+        let col = self.value as u8;
+        controller.set_all(ColorRGB::new(col, col, col));
+        controller.commit()
+    }
+}
+// </editor-fold>
+
 // Simple beat runner
 // <editor-fold>
 pub struct SimpleBeatRunner {
@@ -153,15 +193,15 @@ impl Runner for SimpleBeatRunner {
 }
 // </editor-fold>
 
-// Intense runner
+// Epilepsy runner
 // <editor-fold>
-pub struct IntenseRunner {
+pub struct EpilepsyRunner {
     current_color: HSV,
     gravity: f32,
     last_update: Instant,
 }
 
-impl IntenseRunner {
+impl EpilepsyRunner {
     pub fn new() -> Self {
         Self {
             current_color: HSV::new(0, 255, 255),
@@ -171,7 +211,7 @@ impl IntenseRunner {
     }
 }
 
-impl Runner for IntenseRunner {
+impl Runner for EpilepsyRunner {
     fn beat(&mut self) {
         self.current_color.maximize_brightness();
     }
