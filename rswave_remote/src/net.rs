@@ -77,10 +77,7 @@ impl NetHandler {
     }
 
     pub fn send_current_data(
-        &mut self,
-        audio: &AudioProcessor,
-        spotify: Option<&SpotifyTracker>,
-        no_ack: bool,
+        &mut self, audio: &AudioProcessor, spotify: Option<&SpotifyTracker>, no_ack: bool,
     ) -> Result<()> {
         let novelty_data = NoveltyModeData {
             value: audio.novelty(),

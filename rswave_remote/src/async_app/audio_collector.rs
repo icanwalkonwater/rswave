@@ -74,12 +74,8 @@ impl AudioCollector {
     }
 
     fn run(
-        device: Device,
-        config: SupportedStreamConfig,
-        sample_size: usize,
-        mut prod: Producer<f64>,
-        buffer_barrier: Arc<Barrier>,
-        mut stop: oneshot::Receiver<bool>,
+        device: Device, config: SupportedStreamConfig, sample_size: usize, mut prod: Producer<f64>,
+        buffer_barrier: Arc<Barrier>, mut stop: oneshot::Receiver<bool>,
     ) {
         let buffer_barrier_clone = buffer_barrier.clone();
 

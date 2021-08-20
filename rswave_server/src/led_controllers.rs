@@ -1,5 +1,6 @@
 use anyhow::Result;
 use cichlid::ColorRGB;
+#[cfg(feature = "controller_gpio")]
 use rppal::gpio::{Gpio, OutputPin};
 #[cfg(feature = "controller_ws2811")]
 use rs_ws281x::{ChannelBuilder, ControllerBuilder, RawColor, StripType};

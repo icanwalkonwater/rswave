@@ -71,9 +71,7 @@ impl SpotifyHolder {
     }
 
     async fn run(
-        refresh_interval: f32,
-        mut oauth: SpotifyOAuth,
-        mut spotify: Spotify,
+        refresh_interval: f32, mut oauth: SpotifyOAuth, mut spotify: Spotify,
         shared_track: Arc<Mutex<Option<TrackHolder>>>,
     ) {
         let refresh_interval = Duration::from_secs_f32(refresh_interval);

@@ -49,8 +49,7 @@ impl<C: LedController + Send + 'static> App<C> {
     }
 
     fn make_controller_thread(
-        opt: Opt,
-        mut controller: C,
+        opt: Opt, mut controller: C,
     ) -> (JoinHandle<()>, Updater<ControllerMessage>) {
         let (mut receiver, updater) =
             single_value_channel::channel_starting_with(ControllerMessage::Noop);

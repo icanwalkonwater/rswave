@@ -47,9 +47,7 @@ impl AudioProcessor {
     /// Create a new [AudioProcessor].
     /// It will automatically create and manage the buffers required for the analysis.
     pub fn new(
-        sample_size: usize,
-        novelty_buffer_size: usize,
-        short_term_novelty_size: usize,
+        sample_size: usize, novelty_buffer_size: usize, short_term_novelty_size: usize,
     ) -> Self {
         assert!(short_term_novelty_size <= novelty_buffer_size);
         let mut fft_planner = RealFftPlanner::new();
