@@ -1,0 +1,17 @@
+[Unit]
+Description=RSWave Remote
+After=rswave_server.service
+Requires=rswave_server.service
+
+[Service]
+Type=simple
+User=pi
+Environment=SPOTIFY_ID=XXXXXXXXXX
+Environment=SPOTIFY_SECRET=XXXXXXXXXX
+WorkingDirectory=/home/pi
+# Assumes that the executable is in /usr/local/bin or any other folder that is in the PATH
+ExecStart=rswave_remote -a localhost:20200 --no-tui
+Restart=always
+
+[Install]
+WantedBy=multi-user.target

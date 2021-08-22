@@ -1,0 +1,12 @@
+[Unit]
+Description=RSWave Server
+
+[Service]
+Type=simple
+User=root
+# Assumes that the executable is in /usr/local/bin or any other folder that is in the PATH
+ExecStart=rswave_server -l gpio --standby-speed 0.5
+Restart=always
+
+[Install]
+WantedBy=multi-user.target
