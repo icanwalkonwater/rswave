@@ -1,5 +1,8 @@
 [Unit]
 Description=RSWave Server
+# Uncomment to have it start after spotifyd
+#After=spotidyd.service
+#Requires=spotifyd.service
 
 [Service]
 Type=simple
